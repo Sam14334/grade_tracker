@@ -17,33 +17,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || is
     $cleanCode = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $courseCode));
     $classCode = $cleanCode . "-SEC" . rand(1, 9);
 
-    // 1. Insert into grade_templates table
-    $stmtTpl = mysqli_prepare($conn, "INSERT INTO grade_templates (user_id, course_code, course_title, class_code) VALUES (?, ?, ?, ?)");
-    mysqli_stmt_bind_param($stmtTpl, "isss", $userId, $courseCode, $courseTitle, $classCode);
+    // insert grade template and return generated id
+    $stmtTpl = $conn->prepare("INSERT INTO grade_templates (user_id, course_code, course_title, class_code) VALUES (?, ?, ?, ?) RETURNING template_id");
 
-    if (mysqli_stmt_execute($stmtTpl)) {
-        $templateId = mysqli_insert_id($conn);
+    if ($stmtTpl->execute([$userId, $courseCode, $courseTitle, $classCode])) {
+        $templateId = (int)$stmtTpl->fetchColumn();
 
-        // 2. Insert each component and its weight using component_name
+        // insert components
         $componentNames = $_POST['component_name'] ?? $_POST['component_id'] ?? [];
         $weights = $_POST['weight'] ?? [];
 
-        $stmtComp = mysqli_prepare($conn, "INSERT INTO template_components (template_id, component_name, weight) VALUES (?, ?, ?)");
+        $stmtComp = $conn->prepare("INSERT INTO template_components (template_id, component_name, weight) VALUES (?, ?, ?)");
 
         for ($i = 0; $i < count($componentNames); $i++) {
             $compName = trim((string)$componentNames[$i]);
             $weight = (int)($weights[$i] ?? 0);
 
             if (!empty($compName)) {
-                mysqli_stmt_bind_param($stmtComp, "isi", $templateId, $compName, $weight);
-                mysqli_stmt_execute($stmtComp);
+                $stmtComp->execute([$templateId, $compName, $weight]);
             }
         }
 
-        // 3. Automatically link creator in enrolled_courses so it shows up in their active courses
-        $stmtEnroll = mysqli_prepare($conn, "INSERT IGNORE INTO enrolled_courses (user_id, template_id) VALUES (?, ?)");
-        mysqli_stmt_bind_param($stmtEnroll, "ii", $userId, $templateId);
-        mysqli_stmt_execute($stmtEnroll);
+        // postgres on conflict do nothing instead of insert ignore
+        $stmtEnroll = $conn->prepare("INSERT INTO enrolled_courses (user_id, template_id) VALUES (?, ?) ON CONFLICT DO NOTHING");
+        $stmtEnroll->execute([$userId, $templateId]);
 
         // Redirect back to dashboard with success
         if (isset($_SESSION['role']) && (strcasecmp($_SESSION['role'], 'Professor') === 0 || strcasecmp($_SESSION['role'], 'Teacher') === 0)) {
@@ -53,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || is
         }
         exit();
     } else {
-        echo "Error: " . mysqli_error($conn);
+        echo "Error saving template.";
     }
 }
 ?>

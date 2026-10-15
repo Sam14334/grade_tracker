@@ -16,10 +16,18 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const emailParam = urlParams.get('email');
+    const displayEmail = document.getElementById('displayEmail');
+    if (emailParam && displayEmail) {
+        displayEmail.textContent = emailParam;
+    }
+
     if (inputs.length > 0) inputs[0].focus();
 });
 
-function handleOtpVerification(e) {
+// submit otp code to backend
+async function handleOtpVerification(e) {
     e.preventDefault();
     const inputs = document.querySelectorAll('.otp-input');
     let otpCode = '';
@@ -30,20 +38,61 @@ function handleOtpVerification(e) {
         return;
     }
 
-    // Demo code: 123456
-    if (otpCode === '123456') {
-        showOtpAlert('Account verified successfully! Redirecting to login...', 'success');
-        
-        setTimeout(() => {
-            window.location.href = 'index.html?registered=success';
-        }, 1200);
-    } else {
-        showOtpAlert('Invalid verification code. Please enter 123456.', 'error');
+    const email = new URLSearchParams(window.location.search).get('email') || '';
+
+    try {
+        const formData = new FormData();
+        formData.append('email', email);
+        formData.append('otp', otpCode);
+
+        const res = await fetch('php/verify_otp.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            showOtpAlert('Account verified successfully! Redirecting to login...', 'success');
+            setTimeout(() => {
+                window.location.href = data.redirect || 'index.html?registered=success';
+            }, 1200);
+        } else {
+            showOtpAlert(data.error || 'Invalid verification code.', 'error');
+        }
+    } catch (err) {
+        showOtpAlert('Failed to connect to verification server.', 'error');
     }
 }
 
-function resendOtpCode() {
-    showOtpAlert('A new verification code has been sent to your email.', 'success');
+// request new otp via resend
+async function resendOtpCode() {
+    const email = new URLSearchParams(window.location.search).get('email') || '';
+
+    if (!email) {
+        showOtpAlert('Email not found. Please register again.', 'error');
+        return;
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('email', email);
+
+        const res = await fetch('php/resend_otp.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            showOtpAlert(data.message || 'A new verification code has been sent to your email.', 'success');
+        } else {
+            showOtpAlert(data.error || 'Failed to resend code.', 'error');
+        }
+    } catch (err) {
+        showOtpAlert('Failed to request new code. Try again later.', 'error');
+    }
 }
 
 function showOtpAlert(msg, type = 'error') {
