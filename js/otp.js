@@ -34,7 +34,6 @@ function handleOtpVerification(e) {
     if (otpCode === '123456') {
         showOtpAlert('Verification successful! Redirecting to your dashboard...', 'success');
         
-        // Determine whether to route to professor or student dashboard based on stored role
         const targetRole = localStorage.getItem('pendingUserRole') || 'student';
         
         setTimeout(() => {

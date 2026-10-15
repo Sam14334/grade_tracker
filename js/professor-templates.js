@@ -16,11 +16,9 @@ document.addEventListener("DOMContentLoaded", () => {
     renderTemplatesList();
     calculateTotalWeight();
 
-    // Event listeners to handle dynamic rows and actions safely
     document.getElementById('addRowBtn').addEventListener('click', addComponentRow);
     document.getElementById('publishBtn').addEventListener('click', publishTemplate);
 
-    // Event delegation for dynamically added weight inputs and delete buttons
     document.getElementById('componentContainer').addEventListener('input', (e) => {
         if (e.target.classList.contains('comp-weight')) {
             calculateTotalWeight();
