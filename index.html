@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grade Tracker - Login</title>
+    <title>Grade Tracker - Auth</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -12,22 +12,12 @@
         tailwind.config = {
             theme: {
                 extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
                         maroon: {
-                            50: '#fdf2f4',
-                            100: '#fbe5e8',
-                            200: '#f7ced5',
-                            300: '#f0a7b5',
-                            400: '#e5758c',
-                            500: '#d54865',
-                            600: '#be2b4b',
-                            700: '#9f1f3a',
-                            800: '#800020', 
-                            900: '#6b0820',
-                            950: '#3d010e',
+                            50: '#fdf2f4', 100: '#fbe5e8', 200: '#f7ced5', 300: '#f0a7b5',
+                            400: '#e5758c', 500: '#d54865', 600: '#be2b4b', 700: '#9f1f3a',
+                            800: '#800020', 900: '#6b0820', 950: '#3d010e',
                         }
                     }
                 }
@@ -48,10 +38,10 @@
             backdrop-filter: blur(16px);
         }
         .fade-in {
-            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(12px) scale(0.98); }
+            from { opacity: 0; transform: translateY(8px) scale(0.99); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
     </style>
@@ -68,20 +58,17 @@
                 <i class="fa-solid fa-graduation-cap text-2xl"></i>
             </div>
         </div>
-        <h1 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-            Grade Tracker
-        </h1>
-        </p>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Grade Tracker</h1>
     </header>
 
     <main class="w-full max-w-md my-auto py-6 z-10 fade-in">
-        <div class="glass-card rounded-3xl shadow-2xl overflow-hidden border border-maroon-200/40">
+        <div class="glass-card rounded-3xl shadow-2xl overflow-hidden border border-maroon-200/40 min-h-[500px]">
             
-            <div class="flex border-b border-slate-100 bg-slate-50/70 p-1.5">
-                <button id="loginTabBtn" onclick="switchTab('login')" class="flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all duration-200 text-maroon-800 bg-white shadow-sm flex items-center justify-center gap-2">
+            <div id="mainNavTabs" class="flex border-b border-slate-100 bg-slate-50/70 p-1.5">
+                <button id="loginTabBtn" onclick="switchTab('login')" class="flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all text-maroon-800 bg-white shadow-sm flex items-center justify-center gap-2">
                     <i class="fa-solid fa-right-to-bracket text-maroon-700"></i> Log In
                 </button>
-                <button id="registerTabBtn" onclick="switchTab('register')" class="flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 flex items-center justify-center gap-2">
+                <button id="registerTabBtn" onclick="switchTab('register')" class="flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-2xl transition-all text-slate-500 hover:text-slate-800 flex items-center justify-center gap-2">
                     <i class="fa-solid fa-user-plus"></i> Create Account
                 </button>
             </div>
@@ -91,49 +78,91 @@
                 <span id="alertMessage"></span>
             </div>
 
-            <form id="loginForm" action="php/login.php" method="POST" onsubmit="handleLogin(event)" class="p-6 sm:p-8 space-y-5">
+            <!-- Login Section -->
+            <div id="loginSection" class="p-6 sm:p-8 fade-in">
+                <!-- Role Selector -->
+                <div class="mb-5 p-1 bg-slate-100 rounded-xl flex gap-1">
+                    <button type="button" id="studentRoleBtn" onclick="selectRole('student')" class="flex-1 py-2 text-xs font-bold rounded-lg transition-all text-maroon-900 bg-white shadow-sm flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-user-graduate"></i> Student
+                    </button>
+                    <button type="button" id="professorRoleBtn" onclick="selectRole('professor')" class="flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-chalkboard-user"></i> Professor
+                    </button>
+                </div>
+
+                <form id="loginForm" action="php/login.php" method="POST" onsubmit="return handleLoginValidation(event)" class="space-y-4">
+                    <input type="hidden" name="userRole" id="userRoleInput" value="student">
+
+                    <div>
+                        <label for="loginEmail" id="loginEmailLabel" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Student Email (@iskolarngbayan.pup.edu.ph)</label>
+                        <div class="relative">
+                            <i id="loginEmailIcon" class="fa-solid fa-user-graduate absolute left-4 top-3.5 text-slate-400 text-sm"></i>
+                            <input type="email" name="loginEmail" id="loginEmail" required class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="e.g. name@iskolarngbayan.pup.edu.ph">
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label for="loginPassword" class="block text-xs font-bold uppercase tracking-wider text-slate-600">Password</label>
+                            <button type="button" onclick="showForgotPassword()" class="text-xs font-semibold text-maroon-700 hover:text-maroon-900 transition">Forgot?</button>
+                        </div>
+                        <div class="relative">
+                            <i class="fa-solid fa-lock absolute left-4 top-3.5 text-slate-400 text-sm"></i>
+                            <input type="password" id="loginPassword" name="loginPassword" required class="w-full pl-11 pr-11 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="••••••••">
+                            <button type="button" onclick="togglePasswordVisibility('loginPassword', this)" class="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 transition">
+                                <i class="fa-solid fa-eye text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-1">
+                        <label class="flex items-center space-x-2.5 cursor-pointer">
+                            <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded border-slate-300 text-maroon-800 focus:ring-maroon-700">
+                            <span class="text-xs text-slate-600 font-medium">Remember me</span>
+                        </label>
+                    </div>
+
+                    <button type="submit" name="btnLogin" class="w-full py-3.5 bg-gradient-to-r from-maroon-900 via-maroon-800 to-maroon-700 hover:from-maroon-950 hover:to-maroon-800 text-white font-bold rounded-2xl transition duration-200 shadow-xl shadow-maroon-900/30 text-sm flex items-center justify-center space-x-2 group">
+                        <span id="signInBtnText">Sign In as Student</span>
+                        <i class="fa-solid fa-arrow-right text-xs transition-transform group-hover:translate-x-1"></i>
+                    </button>
+
+                    <div class="pt-2 text-center border-t border-slate-100">
+                        <p class="text-[11px] text-slate-400 font-medium leading-relaxed">
+                            Demo: <span class="text-maroon-800 font-bold">catsovercash@iskolarngbayan.pup.edu.ph</span> or <span class="text-maroon-800 font-bold">professor@pup.edu.ph</span> (pw: <span class="text-maroon-800 font-bold">123123123</span>)
+                        </p>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Forgot Password Section -->
+            <div id="forgotPasswordSection" class="p-6 sm:p-8 space-y-5 hidden fade-in">
                 <div>
-                    <label for="loginUsername" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Username or Student ID</label>
-                    <div class="relative">
-                        <i class="fa-solid fa-user absolute left-4 top-3.5 text-slate-400 text-sm"></i>
-                        <input type="text" name="loginUsername" id="loginUsername" required class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="e.g. Password">
+                    <button type="button" onclick="hideForgotPassword()" class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-maroon-800 transition mb-3">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Login
+                    </button>
+                    <h2 class="text-lg font-bold text-slate-800">Reset Your Password</h2>
+                    <p class="text-xs text-slate-500 mt-1">Enter your registered PUP email address, and we'll send instructions to recover access.</p>
+                </div>
+
+                <form id="forgotPasswordForm" action="#" method="POST" onsubmit="handleForgotPassword(event)" class="space-y-4">
+                    <div>
+                        <label for="resetIdentifier" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Official PUP Email</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-envelope absolute left-4 top-3.5 text-slate-400 text-sm"></i>
+                            <input type="email" id="resetIdentifier" name="resetIdentifier" required class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="name@pup.edu.ph or @iskolarngbayan.pup.edu.ph">
+                        </div>
                     </div>
-                </div>
 
-                <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                        <label for="loginPassword" class="block text-xs font-bold uppercase tracking-wider text-slate-600">Password</label>
-                        <a href="javascript:void(0)" onclick="showForgotPassword()" class="text-xs font-semibold text-maroon-700 hover:text-maroon-900 transition">Forgot?</a>
-                    </div>
-                    <div class="relative">
-                        <i class="fa-solid fa-lock absolute left-4 top-3.5 text-slate-400 text-sm"></i>
-                        <input type="password" id="loginPassword" name="loginPassword"required class="w-full pl-11 pr-11 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="••••••••">
-                        <button type="button" onclick="togglePasswordVisibility('loginPassword', this)" class="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 transition">
-                            <i class="fa-solid fa-eye text-sm"></i>
-                        </button>
-                    </div>
-                </div>
+                    <button type="submit" class="w-full py-3.5 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-2xl transition duration-200 shadow-xl text-sm flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-paper-plane text-xs"></i>
+                        <span>Send Recovery Link</span>
+                    </button>
+                </form>
+            </div>
 
-                <div class="flex items-center justify-between pt-1">
-                    <label class="flex items-center space-x-2.5 cursor-pointer">
-                        <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded border-slate-300 text-maroon-800 focus:ring-maroon-700 rounded-md">
-                        <span class="text-xs text-slate-600 font-medium">Remember me</span>
-                    </label>
-                </div>
-
-                <button type="submit" name="btnLogin" class="w-full py-3.5 bg-gradient-to-r from-maroon-900 via-maroon-800 to-maroon-700 hover:from-maroon-950 hover:to-maroon-800 text-white font-bold rounded-2xl transition duration-200 shadow-xl shadow-maroon-900/30 text-sm flex items-center justify-center space-x-2 group">
-                    <span>Sign In</span>
-                    <i class="fa-solid fa-arrow-right text-xs transition-transform group-hover:translate-x-1"></i>
-                </button>
-
-                <div class="pt-2 text-center border-t border-slate-100">
-                    <p class="text-[11px] text-slate-400 font-medium">
-                        Quick Demo Login: <span class="text-maroon-800 font-bold">test123</span> / <span class="text-maroon-800 font-bold">password123</span>
-                    </p>
-                </div>
-            </form>
-
-            <form id="registerForm" action="php/register.php" method="POST" onsubmit="handleRegister(event)" class="p-6 sm:p-8 space-y-4 hidden">
+            <!-- Register Form -->
+            <form id="registerForm" action="php/register.php" method="POST" onsubmit="return handleRegister(event)" class="p-6 sm:p-8 space-y-4 hidden fade-in">
                 <div>
                     <label for="regFullName" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Full Name</label>
                     <div class="relative">
@@ -143,11 +172,25 @@
                 </div>
 
                 <div>
-                    <label for="regUsername" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Username</label>
+                    <label for="regRole" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Register As</label>
                     <div class="relative">
-                        <i class="fa-solid fa-at absolute left-4 top-3.5 text-slate-400 text-sm"></i>
-                        <input type="text" id="regUsername" name="regUsername" required class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="Username">
+                        <i class="fa-solid fa-user-gear absolute left-4 top-3.5 text-slate-400 text-sm"></i>
+                        <select id="regRole" name="regRole" required onchange="handleRegRoleChange(this.value)" class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium appearance-none bg-white">
+                            <option value="student">Student</option>
+                            <option value="professor">Professor</option>
+                        </select>
                     </div>
+                </div>
+
+                <div>
+                    <label for="regEmail" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Email Address</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-envelope absolute left-4 top-3.5 text-slate-400 text-sm"></i>
+                        <input type="email" id="regEmail" name="regEmail" required class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="e.g. name@iskolarngbayan.pup.edu.ph">
+                    </div>
+                    <p id="regEmailHint" class="text-[10px] text-slate-500 font-medium mt-1">
+                        Must end with <span class="font-bold text-maroon-700" id="regEmailDomainRequired">@iskolarngbayan.pup.edu.ph</span>
+                    </p>
                 </div>
 
                 <div>
@@ -165,7 +208,10 @@
                     <label for="regConfirmPassword" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Confirm Password</label>
                     <div class="relative">
                         <i class="fa-solid fa-shield-halved absolute left-4 top-3.5 text-slate-400 text-sm"></i>
-                        <input type="password" id="regConfirmPassword" name="regConfirmPassword" required class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="Re-enter password">
+                        <input type="password" id="regConfirmPassword" name="regConfirmPassword" required minlength="6" class="w-full pl-11 pr-11 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400" placeholder="Re-enter password">
+                        <button type="button" onclick="togglePasswordVisibility('regConfirmPassword', this)" class="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 transition">
+                            <i class="fa-solid fa-eye text-sm"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -181,34 +227,169 @@
     </main>
 
     <footer class="w-full max-w-md text-center py-3 z-10">
-        <p class="text-maroon-200/60 text-xs font-medium">
-            © Grade Tracker 
+        <p class="text-maroon-200/60 text-xs font-medium">© Grade Tracker</p>
     </footer>
 
     <script>
-
-        // Tab Switching Logic
+        // Tab Switcher (Login / Register)
         function switchTab(tab) {
-            const loginForm = document.getElementById('loginForm');
+            const loginSection = document.getElementById('loginSection');
             const registerForm = document.getElementById('registerForm');
-            const loginTabBtn = document.getElementById('loginTabBtn');
-            const registerTabBtn = document.getElementById('registerTabBtn');
+            const forgotSection = document.getElementById('forgotPasswordSection');
+            const mainNavTabs = document.getElementById('mainNavTabs');
             
             hideAlert();
+            forgotSection.classList.add('hidden');
+            mainNavTabs.classList.remove('hidden');
 
             if (tab === 'login') {
-                loginForm.classList.remove('hidden');
+                loginSection.classList.remove('hidden');
                 registerForm.classList.add('hidden');
-                
-                loginTabBtn.className = "flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all duration-200 text-maroon-800 bg-white shadow-sm flex items-center justify-center gap-2";
-                registerTabBtn.className = "flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 flex items-center justify-center gap-2";
+                document.getElementById('loginTabBtn').className = "flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all text-maroon-800 bg-white shadow-sm flex items-center justify-center gap-2";
+                document.getElementById('registerTabBtn').className = "flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-2xl transition-all text-slate-500 hover:text-slate-800 flex items-center justify-center gap-2";
             } else {
                 registerForm.classList.remove('hidden');
-                loginForm.classList.add('hidden');
-                
-                registerTabBtn.className = "flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all duration-200 text-maroon-800 bg-white shadow-sm flex items-center justify-center gap-2";
-                loginTabBtn.className = "flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 flex items-center justify-center gap-2";
+                loginSection.classList.add('hidden');
+                document.getElementById('registerTabBtn').className = "flex-1 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all text-maroon-800 bg-white shadow-sm flex items-center justify-center gap-2";
+                document.getElementById('loginTabBtn').className = "flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-2xl transition-all text-slate-500 hover:text-slate-800 flex items-center justify-center gap-2";
             }
+        }
+
+        // Forgot Password Section Toggles
+        function showForgotPassword() {
+            hideAlert();
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('mainNavTabs').classList.add('hidden');
+            document.getElementById('forgotPasswordSection').classList.remove('hidden');
+        }
+
+        function hideForgotPassword() {
+            hideAlert();
+            document.getElementById('forgotPasswordSection').classList.add('hidden');
+            document.getElementById('mainNavTabs').classList.remove('hidden');
+            switchTab('login');
+        }
+
+        function handleForgotPassword(e) {
+            e.preventDefault();
+            const identifier = document.getElementById('resetIdentifier').value.trim();
+            showAlert(`Password reset link sent to ${identifier} if registered.`, 'success');
+            document.getElementById('forgotPasswordForm').reset();
+        }
+
+        // Student/Professor Role Switcher (Login)
+        function selectRole(role) {
+            const studentBtn = document.getElementById('studentRoleBtn');
+            const professorBtn = document.getElementById('professorRoleBtn');
+            const roleInput = document.getElementById('userRoleInput');
+            const emailLabel = document.getElementById('loginEmailLabel');
+            const emailIcon = document.getElementById('loginEmailIcon');
+            const emailInput = document.getElementById('loginEmail');
+            const signInBtnText = document.getElementById('signInBtnText');
+
+            roleInput.value = role;
+
+            if (role === 'student') {
+                studentBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-maroon-900 bg-white shadow-sm flex items-center justify-center gap-1.5";
+                professorBtn.className = "flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1.5";
+                emailLabel.textContent = "Student Email (@iskolarngbayan.pup.edu.ph)";
+                emailIcon.className = "fa-solid fa-user-graduate absolute left-4 top-3.5 text-slate-400 text-sm";
+                emailInput.placeholder = "e.g. name@iskolarngbayan.pup.edu.ph";
+                signInBtnText.textContent = "Sign In as Student";
+            } else {
+                professorBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-maroon-900 bg-white shadow-sm flex items-center justify-center gap-1.5";
+                studentBtn.className = "flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1.5";
+                emailLabel.textContent = "Faculty Email (@pup.edu.ph)";
+                emailIcon.className = "fa-solid fa-chalkboard-user absolute left-4 top-3.5 text-slate-400 text-sm";
+                emailInput.placeholder = "e.g. name@pup.edu.ph";
+                signInBtnText.textContent = "Sign In as Professor";
+            }
+        }
+
+        // Registration Role Change Helper
+        function handleRegRoleChange(role) {
+            const emailInput = document.getElementById('regEmail');
+            const domainSpan = document.getElementById('regEmailDomainRequired');
+            if (role === 'professor') {
+                emailInput.placeholder = "e.g. name@pup.edu.ph";
+                domainSpan.textContent = "@pup.edu.ph";
+            } else {
+                emailInput.placeholder = "e.g. name@iskolarngbayan.pup.edu.ph";
+                domainSpan.textContent = "@iskolarngbayan.pup.edu.ph";
+            }
+        }
+
+        // Login Form Validation
+        function handleLoginValidation(e) {
+            const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+            const role = document.getElementById('userRoleInput').value;
+
+            const parts = email.split('@');
+            if (parts.length !== 2 || !parts[0] || !parts[1]) {
+                e.preventDefault();
+                showAlert('Please enter a valid email address.', 'error');
+                return false;
+            }
+
+            const domain = parts[1];
+            if (role === 'student' && domain !== 'iskolarngbayan.pup.edu.ph') {
+                e.preventDefault();
+                showAlert('Student sign-in requires an official @iskolarngbayan.pup.edu.ph email address. Other domains (e.g. Gmail) are not accepted.', 'error');
+                return false;
+            }
+
+            if (role === 'professor' && domain !== 'pup.edu.ph') {
+                e.preventDefault();
+                showAlert('Professor sign-in requires an official @pup.edu.ph email address. Other domains (e.g. Gmail) are not accepted.', 'error');
+                return false;
+            }
+
+            hideAlert();
+            return true;
+        }
+
+        // Registration Form Validation
+        function handleRegister(e) {
+            const email = document.getElementById('regEmail').value.trim().toLowerCase();
+            const role = document.getElementById('regRole').value;
+            const pwd = document.getElementById('regPassword').value;
+            const confirmPwd = document.getElementById('regConfirmPassword').value;
+
+            const parts = email.split('@');
+            if (parts.length !== 2 || !parts[0] || !parts[1]) {
+                e.preventDefault();
+                showAlert('Please enter a valid email address.', 'error');
+                return false;
+            }
+
+            const domain = parts[1];
+            if (role === 'student' && domain !== 'iskolarngbayan.pup.edu.ph') {
+                e.preventDefault();
+                showAlert('Student accounts must use an official @iskolarngbayan.pup.edu.ph email address. (Gmail and other providers are not accepted)', 'error');
+                return false;
+            }
+
+            if (role === 'professor' && domain !== 'pup.edu.ph') {
+                e.preventDefault();
+                showAlert('Professor accounts must use an official @pup.edu.ph email address. (Gmail and other providers are not accepted)', 'error');
+                return false;
+            }
+
+            if (pwd !== confirmPwd) {
+                e.preventDefault();
+                showAlert('Passwords do not match. Please try again.', 'error');
+                return false;
+            }
+
+            if (pwd.length < 6) {
+                e.preventDefault();
+                showAlert('Password must be at least 6 characters long.', 'error');
+                return false;
+            }
+
+            hideAlert();
+            return true;
         }
 
         // Toggle Password Show/Hide
@@ -246,6 +427,17 @@
         function hideAlert() {
             document.getElementById('authAlert').classList.add('hidden');
         }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('registered') === 'success') {
+                showAlert('Account registered successfully! You can now log in.', 'success');
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (params.get('error')) {
+                showAlert(decodeURIComponent(params.get('error')), 'error');
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        });
     </script>
 </body>
 </html>
