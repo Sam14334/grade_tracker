@@ -30,21 +30,15 @@ function handleOtpVerification(e) {
         return;
     }
 
-    // Verification check (Demo code: 123456)
+    // Demo code: 123456
     if (otpCode === '123456') {
-        showOtpAlert('Verification successful! Redirecting to your dashboard...', 'success');
-        
-        const targetRole = localStorage.getItem('pendingUserRole') || 'student';
+        showOtpAlert('Account verified successfully! Redirecting to login...', 'success');
         
         setTimeout(() => {
-            if (targetRole === 'professor') {
-                window.location.href = 'professor_dashboard.php';
-            } else {
-                window.location.href = 'student_dashboard.php';
-            }
+            window.location.href = 'index.html?registered=success';
         }, 1200);
     } else {
-        showOtpAlert('Invalid verification code. Please use code 123456.', 'error');
+        showOtpAlert('Invalid verification code. Please enter 123456.', 'error');
     }
 }
 

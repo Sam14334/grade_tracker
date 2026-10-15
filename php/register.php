@@ -1,77 +1,71 @@
 <?php
 // register.php
+session_start();
 include 'db.php';
 
 if (isset($_POST['btnRegister'])) {
     $fullName = trim($_POST['regFullName'] ?? '');
+    $role = strtolower(trim($_POST['regRole'] ?? 'student'));
     $email = strtolower(trim($_POST['regEmail'] ?? ''));
     $password = $_POST['regPassword'] ?? '';
     $confirmPassword = $_POST['regConfirmPassword'] ?? '';
-    $regRole = strtolower(trim($_POST['regRole'] ?? 'student'));
 
-    // 1. Basic validation
-    if (empty($fullName) || empty($email) || empty($password)) {
+    // Basic required fields check
+    if (empty($fullName) || empty($email) || empty($password) || empty($confirmPassword)) {
         header("Location: ../index.html?error=" . urlencode("All fields are required."));
         exit();
     }
 
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        header("Location: ../index.html?error=" . urlencode("Please enter a valid email format."));
-        exit();
-    }
-
-    // 2. Strict PUP domain validation
-    $emailParts = explode('@', $email);
-    $domain = end($emailParts);
-
-    if ($regRole === 'professor' || $regRole === 'teacher') {
-        if ($domain !== 'pup.edu.ph') {
-            header("Location: ../index.html?error=" . urlencode("Professor registration requires an official @pup.edu.ph email address. Other domains (including Gmail) are not accepted."));
-            exit();
-        }
-        $roleId = 2;
-    } else {
-        if ($domain !== 'iskolarngbayan.pup.edu.ph') {
-            header("Location: ../index.html?error=" . urlencode("Student registration requires an official @iskolarngbayan.pup.edu.ph email address. Other domains (including Gmail) are not accepted."));
-            exit();
-        }
-        $roleId = 3;
-    }
-
-    // 3. Password matching and strength
+    // Password match check
     if ($password !== $confirmPassword) {
         header("Location: ../index.html?error=" . urlencode("Passwords do not match."));
         exit();
     }
 
-    if (strlen($password) < 6) {
-        header("Location: ../index.html?error=" . urlencode("Password must be at least 6 characters."));
+    // Domain validation
+    $emailParts = explode('@', $email);
+    $domain = end($emailParts);
+
+    if ($role === 'professor' && $domain !== 'pup.edu.ph') {
+        header("Location: ../index.html?error=" . urlencode("Professor registration requires an official @pup.edu.ph email address."));
         exit();
     }
 
-    // 4. Check if email already exists
+    if ($role === 'student' && $domain !== 'iskolarngbayan.pup.edu.ph') {
+        header("Location: ../index.html?error=" . urlencode("Student registration requires an official @iskolarngbayan.pup.edu.ph email address."));
+        exit();
+    }
+
+    // Check if email already exists
     $checkStmt = mysqli_prepare($conn, "SELECT user_id FROM users WHERE email = ?");
     mysqli_stmt_bind_param($checkStmt, "s", $email);
     mysqli_stmt_execute($checkStmt);
-    $checkRes = mysqli_stmt_get_result($checkStmt);
+    mysqli_stmt_store_result($checkStmt);
 
-    if (mysqli_fetch_assoc($checkRes)) {
-        header("Location: ../index.html?error=" . urlencode("An account with this email is already registered."));
+    if (mysqli_stmt_num_rows($checkStmt) > 0) {
+        header("Location: ../index.html?error=" . urlencode("Email address is already registered. Please log in."));
         exit();
     }
+    mysqli_stmt_close($checkStmt);
 
-    // 5. Insert new user
-    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+    // Map role string to database role_id
+    $roleId = ($role === 'professor') ? 2 : 1;
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
+    // Insert user into database
     $insertStmt = mysqli_prepare($conn, "INSERT INTO users (full_name, email, password_hash, role_id) VALUES (?, ?, ?, ?)");
-    mysqli_stmt_bind_param($insertStmt, "sssi", $fullName, $email, $hashedPassword, $roleId);
+    mysqli_stmt_bind_param($insertStmt, "sssi", $fullName, $email, $passwordHash, $roleId);
 
     if (mysqli_stmt_execute($insertStmt)) {
-        header("Location: ../index.html?registered=success");
+        // Redirect to OTP verification page to verify account email
+        header("Location: ../otp.html?email=" . urlencode($email));
         exit();
     } else {
-        header("Location: ../index.html?error=" . urlencode("Registration failed: " . mysqli_error($conn)));
+        header("Location: ../index.html?error=" . urlencode("Failed to create account. Please try again."));
         exit();
     }
+} else {
+    header("Location: ../index.html");
+    exit();
 }
 ?>

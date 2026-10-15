@@ -13,6 +13,7 @@ if (isset($_POST['btnLogin'])) {
         exit();
     }
 
+    // 1. Strict domain check based on selected role tab
     $emailParts = explode('@', $email);
     $domain = end($emailParts);
 
@@ -28,18 +29,21 @@ if (isset($_POST['btnLogin'])) {
         }
     }
 
+    // 2. Find user by email and join roles
     $stmt = mysqli_prepare($conn, "SELECT u.*, r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.email = ?");
     mysqli_stmt_bind_param($stmt, "s", $email);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
 
     if ($user = mysqli_fetch_assoc($res)) {
+        // 3. Check password
         if (password_verify($password, $user['password_hash'])) {
             $roleName = $user['role_name']; // 'Professor' or 'Student'
             $roleId = (int)$user['role_id'];
 
             $isProfessor = ($roleId === 2 || strcasecmp($roleName, 'Professor') === 0 || strcasecmp($roleName, 'Teacher') === 0);
 
+            // Double check role alignment
             if ($selectedRole === 'professor' && !$isProfessor) {
                 header("Location: ../index.html?error=" . urlencode("This account is registered as a Student. Please switch to the Student tab to sign in."));
                 exit();
@@ -55,9 +59,13 @@ if (isset($_POST['btnLogin'])) {
             $_SESSION['role'] = $roleName;
             $_SESSION['full_name'] = !empty($user['full_name']) ? $user['full_name'] : $user['email'];
             $_SESSION['role_id'] = $roleId;
-            $_SESSION['is_professor'] = $isProfessor;
 
-            header("Location: ../otp.html");
+            // 5. Direct role-based redirect
+            if ($isProfessor) {
+                header("Location: ../professor_dashboard.php");
+            } else {
+                header("Location: ../student_dashboard.php");
+            }
             exit();
         } else {
             header("Location: ../index.html?error=" . urlencode("Invalid password!"));
@@ -67,8 +75,5 @@ if (isset($_POST['btnLogin'])) {
         header("Location: ../index.html?error=" . urlencode("No account found with this email address."));
         exit();
     }
-} else {
-    header("Location: ../index.html");
-    exit();
 }
 ?>
