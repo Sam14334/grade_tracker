@@ -45,6 +45,24 @@ if (isset($_POST['btnRegister'])) {
         exit();
     }
 
+    ensureOtpRateLimitColumns($conn);
+
+    // Rate limiting: cooldown check if a code was already generated recently for this email
+    $checkPending = $conn->prepare("SELECT last_resend_at, created_at FROM otp_verifications WHERE email = ? LIMIT 1");
+    $checkPending->execute([$email]);
+    $existingPending = $checkPending->fetch();
+
+    if ($existingPending) {
+        $lastSent = !empty($existingPending['last_resend_at']) ? strtotime($existingPending['last_resend_at']) : (!empty($existingPending['created_at']) ? strtotime($existingPending['created_at']) : 0);
+        $secondsSince = time() - $lastSent;
+        $cooldown = 60;
+        if ($secondsSince < $cooldown) {
+            $_SESSION['pending_otp_email'] = $email;
+            header("Location: ../otp.html?email=" . urlencode($email));
+            exit();
+        }
+    }
+
     $roleId = ($role === 'professor') ? 2 : 3;
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
@@ -52,17 +70,20 @@ if (isset($_POST['btnRegister'])) {
     $otpCode = sprintf("%06d", random_int(100000, 999999));
     $expiresAt = date('Y-m-d H:i:sP', strtotime('+10 minutes'));
 
-    // save pending registration to otp_verifications
+    // save pending registration to otp_verifications with rate limiting defaults
     $otpStmt = $conn->prepare("
-        INSERT INTO otp_verifications (email, full_name, password_hash, role_id, otp_code, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO otp_verifications (email, full_name, password_hash, role_id, otp_code, expires_at, resend_count, failed_attempts, last_resend_at)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0, CURRENT_TIMESTAMP)
         ON CONFLICT (email) DO UPDATE SET
             full_name = EXCLUDED.full_name,
             password_hash = EXCLUDED.password_hash,
             role_id = EXCLUDED.role_id,
             otp_code = EXCLUDED.otp_code,
             expires_at = EXCLUDED.expires_at,
-            created_at = CURRENT_TIMESTAMP
+            created_at = CURRENT_TIMESTAMP,
+            resend_count = 0,
+            failed_attempts = 0,
+            last_resend_at = CURRENT_TIMESTAMP
     ");
     $otpStmt->execute([$email, $fullName, $passwordHash, $roleId, $otpCode, $expiresAt]);
 
