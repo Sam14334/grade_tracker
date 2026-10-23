@@ -128,16 +128,6 @@ while ($row = $enrolledStmt->fetch()) {
                     <i class="fa-solid fa-sliders text-sm"></i>
                     <span>Professor Templates</span>
                 </button>
-
-                <button onclick="switchTab('schedule')" id="nav-schedule" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3">
-                    <i class="fa-solid fa-calendar-days text-sm"></i>
-                    <span>Class Schedule</span>
-                </button>
-
-                <button onclick="switchTab('settings')" id="nav-settings" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3">
-                    <i class="fa-solid fa-gear text-sm"></i>
-                    <span>Settings</span>
-                </button>
             </div>
 
             <div class="pt-4 border-t border-stone-300/80 text-[11px] text-stone-500 font-medium">
