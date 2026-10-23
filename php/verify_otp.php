@@ -14,6 +14,8 @@ if (empty($email) || empty($otp)) {
 include 'db.php';
 
 try {
+    ensureOtpRateLimitColumns($conn);
+
     // get pending record
     $stmt = $conn->prepare("SELECT * FROM otp_verifications WHERE email = ? LIMIT 1");
     $stmt->execute([$email]);
@@ -30,9 +32,32 @@ try {
         exit();
     }
 
-    // verify otp code match
+    // verify otp code match with failed attempt rate limiting
     if ($pending['otp_code'] !== $otp) {
-        echo json_encode(['success' => false, 'error' => 'Invalid verification code. Please check your email.']);
+        $failedAttempts = (int)($pending['failed_attempts'] ?? 0) + 1;
+        $maxAttempts = 5;
+
+        if ($failedAttempts >= $maxAttempts) {
+            $del = $conn->prepare("DELETE FROM otp_verifications WHERE email = ?");
+            $del->execute([$email]);
+            unset($_SESSION['pending_otp_email']);
+
+            echo json_encode([
+                'success' => false,
+                'locked' => true,
+                'error' => "Too many incorrect attempts ({$maxAttempts}/{$maxAttempts}). Verification session expired for security. Please register again."
+            ]);
+            exit();
+        }
+
+        $updateFail = $conn->prepare("UPDATE otp_verifications SET failed_attempts = ? WHERE email = ?");
+        $updateFail->execute([$failedAttempts, $email]);
+
+        $remaining = $maxAttempts - $failedAttempts;
+        echo json_encode([
+            'success' => false,
+            'error' => "Invalid verification code. {$remaining} attempt(s) remaining."
+        ]);
         exit();
     }
 

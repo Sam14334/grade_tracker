@@ -23,8 +23,41 @@ document.addEventListener("DOMContentLoaded", () => {
         displayEmail.textContent = emailParam;
     }
 
+    const infoParam = urlParams.get('info');
+    if (infoParam) {
+        showOtpAlert(decodeURIComponent(infoParam), 'error');
+    }
+
     if (inputs.length > 0) inputs[0].focus();
+
+    // Start 60-second cooldown timer upon landing from registration
+    startResendCooldown(60);
 });
+
+let resendTimer = null;
+
+function startResendCooldown(seconds) {
+    const resendBtn = document.getElementById('resendBtn');
+    if (!resendBtn) return;
+
+    if (resendTimer) clearInterval(resendTimer);
+
+    let remaining = Math.max(1, parseInt(seconds, 10));
+    resendBtn.disabled = true;
+    resendBtn.textContent = `Resend in ${remaining}s`;
+
+    resendTimer = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(resendTimer);
+            resendTimer = null;
+            resendBtn.disabled = false;
+            resendBtn.textContent = 'Resend OTP';
+        } else {
+            resendBtn.textContent = `Resend in ${remaining}s`;
+        }
+    }, 1000);
+}
 
 // submit otp code to backend
 async function handleOtpVerification(e) {
@@ -59,6 +92,15 @@ async function handleOtpVerification(e) {
             }, 1200);
         } else {
             showOtpAlert(data.error || 'Invalid verification code.', 'error');
+            if (data.locked) {
+                inputs.forEach(input => {
+                    input.value = '';
+                    input.disabled = true;
+                });
+                setTimeout(() => {
+                    window.location.href = 'index.html?error=' + encodeURIComponent(data.error);
+                }, 3500);
+            }
         }
     } catch (err) {
         showOtpAlert('Failed to connect to verification server.', 'error');
@@ -87,8 +129,12 @@ async function resendOtpCode() {
 
         if (data.success) {
             showOtpAlert(data.message || 'A new verification code has been sent to your email.', 'success');
+            startResendCooldown(data.cooldown || 60);
         } else {
             showOtpAlert(data.error || 'Failed to resend code.', 'error');
+            if (data.retry_after) {
+                startResendCooldown(data.retry_after);
+            }
         }
     } catch (err) {
         showOtpAlert('Failed to request new code. Try again later.', 'error');

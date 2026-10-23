@@ -14,6 +14,8 @@ include 'db.php';
 require_once __DIR__ . '/resend.php';
 
 try {
+    ensureOtpRateLimitColumns($conn);
+
     // get pending record
     $stmt = $conn->prepare("SELECT * FROM otp_verifications WHERE email = ? LIMIT 1");
     $stmt->execute([$email]);
@@ -24,13 +26,49 @@ try {
         exit();
     }
 
+    // Check 60-second cooldown
+    $cooldown = 60;
+    $lastResend = !empty($pending['last_resend_at']) 
+        ? strtotime($pending['last_resend_at']) 
+        : (!empty($pending['created_at']) ? strtotime($pending['created_at']) : 0);
+    $timeSinceLast = time() - $lastResend;
+
+    if ($timeSinceLast < $cooldown) {
+        $remaining = $cooldown - $timeSinceLast;
+        echo json_encode([
+            'success' => false,
+            'error' => "Please wait {$remaining}s before requesting a new code.",
+            'retry_after' => $remaining
+        ]);
+        exit();
+    }
+
+    // Check maximum resend limit (5 attempts)
+    $maxResends = 5;
+    $currentResends = (int)($pending['resend_count'] ?? 0);
+    if ($currentResends >= $maxResends) {
+        echo json_encode([
+            'success' => false,
+            'error' => "Maximum resend limit reached ({$maxResends} attempts). Please register again."
+        ]);
+        exit();
+    }
+
     // generate new 6-digit otp
     $newOtp = sprintf("%06d", random_int(100000, 999999));
     $newExpiresAt = date('Y-m-d H:i:sP', strtotime('+10 minutes'));
+    $newResends = $currentResends + 1;
 
-    // update record with new code and expiry
-    $update = $conn->prepare("UPDATE otp_verifications SET otp_code = ?, expires_at = ? WHERE email = ?");
-    $update->execute([$newOtp, $newExpiresAt, $email]);
+    // update record with new code, expiry, incremented resend_count, and last_resend_at
+    $update = $conn->prepare("
+        UPDATE otp_verifications 
+        SET otp_code = ?, 
+            expires_at = ?, 
+            resend_count = ?, 
+            last_resend_at = CURRENT_TIMESTAMP 
+        WHERE email = ?
+    ");
+    $update->execute([$newOtp, $newExpiresAt, $newResends, $email]);
 
     // send via resend
     $subject = "Your New Grade Tracker Verification Code";
@@ -47,7 +85,12 @@ try {
     ";
     sendResendEmail($email, $subject, $html);
 
-    echo json_encode(['success' => true, 'message' => 'A new verification code has been sent to your email.']);
+    $remainingResends = $maxResends - $newResends;
+    echo json_encode([
+        'success' => true, 
+        'message' => "A new verification code has been sent. ({$remainingResends} resend(s) remaining)",
+        'cooldown' => $cooldown
+    ]);
 } catch (Exception $e) {
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
