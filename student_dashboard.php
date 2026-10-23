@@ -183,31 +183,6 @@ while ($row = $enrolledStmt->fetch()) {
                         </div>
                     </div>
 
-                    <div class="lg:col-span-7 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <h3 class="font-bold text-slate-800 text-base">Class Schedule Timetable</h3>
-                            <button onclick="switchTab('schedule')" class="text-xs font-bold text-maroon-800 hover:underline">Manage Schedule &rarr;</button>
-                        </div>
-
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-center border-collapse text-xs border border-stone-200">
-                                <thead>
-                                    <tr class="bg-stone-100 text-stone-600 font-bold border-b border-stone-200">
-                                        <th class="p-2 border-r border-stone-200 w-20">Time Slot</th>
-                                        <th class="p-2 border-r border-stone-200">Mon</th>
-                                        <th class="p-2 border-r border-stone-200">Tue</th>
-                                        <th class="p-2 border-r border-stone-200">Wed</th>
-                                        <th class="p-2 border-r border-stone-200">Thu</th>
-                                        <th class="p-2 border-r border-stone-200">Fri</th>
-                                        <th class="p-2">Sat</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-stone-200 text-slate-700" id="dashboardScheduleMatrix">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-2 print-card">
