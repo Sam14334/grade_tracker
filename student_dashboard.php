@@ -262,6 +262,140 @@ while ($row = $enrolledStmt->fetch()) {
 
             </div>
 
+            <div id="tab-content-grades" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-lg">Input & Calculate Subject Grades</h3>
+                            <p class="text-xs text-stone-500">Enter your numerical grades (1.00 - 5.00) to update your overall statistics across the system.</p>
+                        </div>
+                        <button onclick="recalculateGradesAndStats()" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-2">
+                            <i class="fa-solid fa-rotate"></i>
+                            <span>Update Statistics</span>
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-stone-100 text-stone-600 font-bold border-b border-stone-200">
+                                    <th class="p-3">Course Code</th>
+                                    <th class="p-3">Course Title</th>
+                                    <th class="p-3">Units</th>
+                                    <th class="p-3">Grade Scale (1.00 - 5.00)</th>
+                                    <th class="p-3">Status Diagnostic</th>
+                                    <th class="p-3 text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-stone-200 text-slate-700" id="gradeInputTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="p-4 bg-stone-50 rounded-2xl border border-stone-200 flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex space-x-6 text-xs">
+                            <div>
+                                <span class="text-stone-500 font-medium">Total Units:</span>
+                                <span class="font-bold text-slate-800 ml-1" id="totalUnitsDisplay">12.0</span>
+                            </div>
+                            <div>
+                                <span class="text-stone-500 font-medium">Calculated GWA:</span>
+                                <span class="font-black text-maroon-900 ml-1 text-sm" id="calcGwaVal">1.25</span>
+                            </div>
+                        </div>
+
+                        <button onclick="addSubjectRow()" class="px-3 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs rounded-lg transition">
+                            + Add Course Row
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-content-templates" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
+                    <h3 class="font-bold text-slate-800 text-lg">Inherit & Sync Class Grading Code</h3>
+                    <p class="text-xs text-stone-500 leading-relaxed">
+                        Enter a unique Class Code provided by your instructor to automatically distribute custom grading weights into your personal grade tracker.
+                    </p>
+
+                    <form action="php/enroll_course.php" method="POST" class="flex gap-3 max-w-md">
+                        <input type="text" name="templateCodeInput" id="templateCodeInput" placeholder="Enter Class Code (e.g. CS301-SEC1)" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-xs font-bold uppercase outline-none focus:border-maroon-800">
+                        <button type="submit" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition shrink-0">
+                            Enroll & Sync
+                        </button>
+                    </form>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-7 bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-5">
+                        <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+                            <h3 class="font-bold text-slate-800 text-base flex items-center space-x-2">
+                                <i class="fa-solid fa-sliders text-maroon-800"></i>
+                                <span>Template Builder Preview</span>
+                            </h3>
+                            <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200" id="weightTotalBadge">Total Weight: 100%</span>
+                        </div>
+
+                        <form id="publishTemplateForm" action="php/publish_template.php" method="POST" onsubmit="return validatePublishForm(event)" class="space-y-4 text-xs">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block font-bold uppercase text-stone-600 mb-1">Course Code</label>
+                                    <input type="text" name="courseCode" id="courseCodeInput" value="CS-301" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block font-bold uppercase text-stone-600 mb-1">Course Title</label>
+                                    <input type="text" name="courseTitle" id="courseTitleInput" value="Software Engineering" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                </div>
+                            </div>
+
+                            <div class="space-y-3 pt-2">
+                                <label class="block font-bold uppercase text-stone-600">Assessment Components & Weights</label>
+
+                                <div class="space-y-2" id="componentContainer">
+                                    <div class="flex items-center space-x-2 component-row">
+                                        <input type="text" name="component_name[]" value="Quizzes & Seatwork" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <input type="number" name="weight[]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                        <span class="font-bold text-stone-400">%</span>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                                    </div>
+
+                                    <div class="flex items-center space-x-2 component-row">
+                                        <input type="text" name="component_name[]" value="Midterm Examination" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <input type="number" name="weight[]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                        <span class="font-bold text-stone-400">%</span>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                                    </div>
+
+                                    <div class="flex items-center space-x-2 component-row">
+                                        <input type="text" name="component_name[]" value="Final Project & Exam" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <input type="number" name="weight[]" value="40" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                        <span class="font-bold text-stone-400">%</span>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                                    </div>
+                                </div>
+
+                                <button type="button" onclick="addComponentRow()" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 pt-1">
+                                    <i class="fa-solid fa-circle-plus"></i>
+                                    <span>Add Assessment Component</span>
+                                </button>
+                            </div>
+
+                            <div class="pt-4 border-t border-stone-200">
+                                <button type="submit" name="btnPublishTemplate" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center">
+                                    Publish Template & Generate Class Code
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="lg:col-span-5 space-y-4">
+                        <h3 class="font-bold text-slate-800 text-base">Enrolled Professor Templates</h3>
+                        <div class="space-y-3" id="publishedTemplatesList">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             
 
         </main>
