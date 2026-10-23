@@ -315,48 +315,7 @@ while ($row = $enrolledStmt->fetch()) {
                         </button>
                     </form>
                 </div>
-
-
-                            <div class="space-y-3 pt-2">
-                                <label class="block font-bold uppercase text-stone-600">Assessment Components & Weights</label>
-
-                                <div class="space-y-2" id="componentContainer">
-                                    <div class="flex items-center space-x-2 component-row">
-                                        <input type="text" name="component_name[]" value="Quizzes & Seatwork" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <input type="number" name="weight[]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
-                                        <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
-                                    </div>
-
-                                    <div class="flex items-center space-x-2 component-row">
-                                        <input type="text" name="component_name[]" value="Midterm Examination" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <input type="number" name="weight[]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
-                                        <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
-                                    </div>
-
-                                    <div class="flex items-center space-x-2 component-row">
-                                        <input type="text" name="component_name[]" value="Final Project & Exam" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <input type="number" name="weight[]" value="40" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
-                                        <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
-                                    </div>
-                                </div>
-
-                                <button type="button" onclick="addComponentRow()" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 pt-1">
-                                    <i class="fa-solid fa-circle-plus"></i>
-                                    <span>Add Assessment Component</span>
-                                </button>
-                            </div>
-
-                            <div class="pt-4 border-t border-stone-200">
-                                <button type="submit" name="btnPublishTemplate" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center">
-                                    Publish Template & Generate Class Code
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-
+                            
                     <div class="lg:col-span-5 space-y-4">
                         <h3 class="font-bold text-slate-800 text-base">Enrolled Professor Templates</h3>
                         <div class="space-y-3" id="publishedTemplatesList">
