@@ -9,10 +9,10 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userId = (int)$_SESSION['user_id'];
-$classCode = trim($_POST['templateCodeInput'] ?? $_POST['class_code'] ?? '');
+$classCode = strtoupper(trim($_POST['templateCodeInput'] ?? $_POST['class_code'] ?? ''));
 
 if (empty($classCode)) {
-    header("Location: ../student_dashboard.php?error=" . urlencode("Please enter a class code."));
+    header("Location: ../student_dashboard.php?error=" . urlencode("Please enter a class code.") . "#templates");
     exit();
 }
 
@@ -27,10 +27,10 @@ if ($template = $stmt->fetch()) {
     $insert = $conn->prepare("INSERT INTO enrolled_courses (user_id, template_id) VALUES (?, ?) ON CONFLICT DO NOTHING");
     $insert->execute([$userId, $templateId]);
 
-    header("Location: ../student_dashboard.php?enrolled=success");
+    header("Location: ../student_dashboard.php?enrolled=success#templates");
     exit();
 } else {
-    header("Location: ../student_dashboard.php?error=" . urlencode("Invalid class code: '$classCode' not found."));
+    header("Location: ../student_dashboard.php?error=" . urlencode("Invalid class code: '$classCode' not found.") . "#templates");
     exit();
 }
 ?>

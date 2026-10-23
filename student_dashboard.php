@@ -302,6 +302,11 @@ while ($row = $enrolledStmt->fetch()) {
             </div>
 
             <div id="tab-content-templates" class="hidden space-y-6">
+                <?php if (isset($_GET['error']) && is_string($_GET['error'])): ?>
+                    <p role="alert" class="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-sm"><?php echo htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8'); ?></p>
+                <?php elseif (($_GET['enrolled'] ?? '') === 'success'): ?>
+                    <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Class enrolled successfully. Your professor's grading template is shown below.</p>
+                <?php endif; ?>
                 <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
                     <h3 class="font-bold text-slate-800 text-lg">Inherit & Sync Class Grading Code</h3>
                     <p class="text-xs text-stone-500 leading-relaxed">
@@ -319,9 +324,35 @@ while ($row = $enrolledStmt->fetch()) {
                     <div class="lg:col-span-5 space-y-4">
                         <h3 class="font-bold text-slate-800 text-base">Enrolled Professor Templates</h3>
                         <div class="space-y-3" id="publishedTemplatesList">
+                            <?php if (empty($dbEnrolled)): ?>
+                                <p class="text-xs text-stone-400 italic">No enrolled templates found.</p>
+                            <?php else: ?>
+                                <?php foreach ($dbEnrolled as $template): ?>
+                                    <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-3">
+                                        <div class="flex items-start justify-between">
+                                            <div>
+                                                <span class="text-[10px] font-bold text-maroon-800 bg-maroon-50 px-2 py-0.5 rounded-full border border-maroon-200">ACTIVE SYNC</span>
+                                                <h4 class="font-extrabold text-slate-900 text-base mt-1"><?php echo htmlspecialchars($template['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></h4>
+                                                <p class="text-xs text-stone-500 font-medium"><?php echo htmlspecialchars($template['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?></p>
+                                            </div>
+                                            <div class="text-right">
+                                                <span class="text-[10px] uppercase font-bold text-stone-400 block">Class Code</span>
+                                                <span class="font-mono font-black text-maroon-900 text-sm bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200 inline-block mt-0.5"><?php echo htmlspecialchars($template['classCode'] ?? '', ENT_QUOTES, 'UTF-8'); ?></span>
+                                            </div>
+                                        </div>
+                                        <div class="bg-stone-50 p-3 rounded-2xl border border-stone-200 text-xs space-y-1.5">
+                                            <?php foreach ($template['components'] as $component): ?>
+                                                <div class="flex justify-between text-stone-600">
+                                                    <span><?php echo htmlspecialchars($component['name'], ENT_QUOTES, 'UTF-8'); ?>:</span>
+                                                    <span class="font-bold text-slate-800"><?php echo (int)$component['weight']; ?>%</span>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </div>
                     </div>
-                </div>
             </div>
 
             
@@ -331,6 +362,9 @@ while ($row = $enrolledStmt->fetch()) {
 
 
     <!-- External Linked JavaScript File -->
-    <script src="./js/student-dashboard.js"></script>
+    <script>
+        window.studentDashboardData = { serverRenderedTemplates: true };
+    </script>
+    <script src="./js/student-dashboard.js?v=<?php echo filemtime(__DIR__ . '/js/student-dashboard.js'); ?>"></script>
 </body>
 </html>

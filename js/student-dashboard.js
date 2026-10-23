@@ -48,6 +48,13 @@ document.addEventListener("DOMContentLoaded", () => {
     renderTemplatesList();
     recalculateGradesAndStats(false);
 
+    if (window.location.hash === '#templates') {
+        switchTab('templates');
+    }
+
+    // The PHP dashboard uses inline handlers and submits enrollment to PHP.
+    if (window.studentDashboardData) return;
+
     // Sidebar Nav Event Listeners
     document.getElementById('nav-dashboard').addEventListener('click', () => switchTab('dashboard'));
     document.getElementById('nav-grades').addEventListener('click', () => switchTab('grades'));
@@ -264,7 +271,7 @@ function renderScheduleTimetable() {
     const fullTable = document.getElementById('fullScheduleTableBody');
 
     dashTable.innerHTML = '';
-    fullTable.innerHTML = '';
+    if (fullTable) fullTable.innerHTML = '';
 
     scheduleMatrix.forEach(row => {
         const dashTr = document.createElement('tr');
@@ -294,7 +301,7 @@ function renderScheduleTimetable() {
                 </button>
             </td>
         `;
-        fullTable.appendChild(fullTr);
+        if (fullTable) fullTable.appendChild(fullTr);
     });
 }
 
@@ -307,6 +314,8 @@ function getSubjectBadgeStyle(subjectCode) {
 }
 
 function renderTemplatesList() {
+    if (window.studentDashboardData) return;
+
     const container = document.getElementById('publishedTemplatesList');
     container.innerHTML = '';
 
