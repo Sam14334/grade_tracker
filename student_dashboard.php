@@ -316,27 +316,6 @@ while ($row = $enrolledStmt->fetch()) {
                     </form>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div class="lg:col-span-7 bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-5">
-                        <div class="flex items-center justify-between border-b border-stone-100 pb-3">
-                            <h3 class="font-bold text-slate-800 text-base flex items-center space-x-2">
-                                <i class="fa-solid fa-sliders text-maroon-800"></i>
-                                <span>Template Builder Preview</span>
-                            </h3>
-                            <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200" id="weightTotalBadge">Total Weight: 100%</span>
-                        </div>
-
-                        <form id="publishTemplateForm" action="php/publish_template.php" method="POST" onsubmit="return validatePublishForm(event)" class="space-y-4 text-xs">
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block font-bold uppercase text-stone-600 mb-1">Course Code</label>
-                                    <input type="text" name="courseCode" id="courseCodeInput" value="CS-301" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
-                                </div>
-                                <div>
-                                    <label class="block font-bold uppercase text-stone-600 mb-1">Course Title</label>
-                                    <input type="text" name="courseTitle" id="courseTitleInput" value="Software Engineering" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
-                                </div>
-                            </div>
 
                             <div class="space-y-3 pt-2">
                                 <label class="block font-bold uppercase text-stone-600">Assessment Components & Weights</label>
