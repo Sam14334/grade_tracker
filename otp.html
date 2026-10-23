@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grade Tracker - Security Verification</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        maroon: {
+                            50: '#fdf2f4', 100: '#fbe5e8', 200: '#f7ced5', 300: '#f0a7b5',
+                            400: '#e5758c', 500: '#d54865', 600: '#be2b4b', 700: '#9f1f3a',
+                            800: '#800020', 900: '#6b0820', 950: '#3d010e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        .bg-mesh {
+            background-color: #3d010e;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(128, 0, 32, 0.8) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(107, 8, 32, 0.9) 0px, transparent 50%),
+                radial-gradient(at 50% 50%, rgba(61, 1, 14, 0.95) 0px, transparent 100%);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(16px);
+        }
+        .fade-in {
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px) scale(0.99); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+    </style>
+</head>
+
+<body class="bg-mesh font-sans text-slate-800 min-h-screen flex flex-col justify-between items-center p-4 sm:p-6 relative overflow-x-hidden selection:bg-maroon-700 selection:text-white">
+
+    <div class="absolute top-12 left-10 w-72 h-72 bg-maroon-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-10 right-10 w-96 h-96 bg-maroon-800/30 rounded-full blur-3xl pointer-events-none"></div>
+
+    <header class="w-full max-w-md pt-4 text-center z-10">
+        <div class="inline-flex items-center justify-center space-x-3 mb-2">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-maroon-900 via-maroon-800 to-maroon-600 flex items-center justify-center text-white shadow-xl shadow-maroon-950/50 border border-maroon-500/30">
+                <i class="fa-solid fa-shield-halved text-2xl"></i>
+            </div>
+        </div>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Identity Verification</h1>
+    </header>
+
+    <main class="w-full max-w-md my-auto py-6 z-10 fade-in">
+        <div class="glass-card rounded-3xl shadow-2xl overflow-hidden border border-maroon-200/40 p-6 sm:p-8 space-y-6">
+            
+            <div class="text-center space-y-2">
+                <div class="w-14 h-14 bg-maroon-50 text-maroon-800 rounded-2xl mx-auto flex items-center justify-center text-xl shadow-inner border border-maroon-100">
+                    <i class="fa-solid fa-envelope-circle-check"></i>
+                </div>
+                <h2 class="text-lg font-bold text-slate-900">Enter Verification Code</h2>
+                <p class="text-xs text-slate-500 leading-relaxed">
+                    We've sent a 6-digit confirmation code to <span id="displayEmail" class="font-bold text-maroon-800">your registered PUP email</span>. Please check your inbox.
+                </p>
+            </div>
+
+            <div id="otpAlert" class="hidden p-3.5 rounded-2xl text-xs font-semibold flex items-start gap-2.5 transition-all">
+                <i id="otpAlertIcon" class="fa-solid fa-circle-exclamation mt-0.5 text-sm"></i>
+                <span id="otpAlertMessage"></span>
+            </div>
+
+            <form id="otpForm" onsubmit="handleOtpVerification(event)" class="space-y-5">
+                <div class="flex justify-center gap-2 sm:gap-3" id="otpInputsContainer">
+                    <input type="text" maxlength="1" class="otp-input w-11 h-12 text-center text-lg font-bold rounded-xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition bg-white" required />
+                    <input type="text" maxlength="1" class="otp-input w-11 h-12 text-center text-lg font-bold rounded-xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition bg-white" required />
+                    <input type="text" maxlength="1" class="otp-input w-11 h-12 text-center text-lg font-bold rounded-xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition bg-white" required />
+                    <input type="text" maxlength="1" class="otp-input w-11 h-12 text-center text-lg font-bold rounded-xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition bg-white" required />
+                    <input type="text" maxlength="1" class="otp-input w-11 h-12 text-center text-lg font-bold rounded-xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition bg-white" required />
+                    <input type="text" maxlength="1" class="otp-input w-11 h-12 text-center text-lg font-bold rounded-xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition bg-white" required />
+                </div>
+
+                <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-maroon-900 via-maroon-800 to-maroon-700 hover:from-maroon-950 hover:to-maroon-800 text-white font-bold rounded-2xl transition duration-200 shadow-xl shadow-maroon-900/30 text-sm flex items-center justify-center space-x-2 cursor-pointer">
+                    <span>Verify & Continue</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                </button>
+            </form>
+
+            <div class="text-center pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span class="text-slate-400">Didn't receive code?</span>
+                <button type="button" onclick="resendOtpCode()" class="font-bold text-maroon-800 hover:text-maroon-950 transition cursor-pointer">Resend OTP</button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="w-full max-w-md text-center py-3 z-10">
+        <p class="text-maroon-200/60 text-xs font-medium">© Grade Tracker</p>
+    </footer>
+
+    <script src="./js/otp.js"></script>
+</body>
+</html>

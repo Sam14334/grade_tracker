@@ -9,20 +9,24 @@ $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email']);
 $userInitial = strtoupper(substr($userName, 0, 1));
 
-// Fetch enrolled or created courses for this student from database
-$enrolledCoursesQuery = mysqli_query($conn, "
-    SELECT DISTINCT gt.template_id, gt.course_code, gt.course_title, gt.class_code, ec.enrollment_id 
+// fetch enrolled or created courses for this student
+$enrolledStmt = $conn->prepare("
+    SELECT DISTINCT gt.template_id, gt.course_code, gt.course_title, gt.class_code, ec.enrollment_id, gt.created_at 
     FROM grade_templates gt
-    LEFT JOIN enrolled_courses ec ON gt.template_id = ec.template_id AND ec.user_id = '$userId'
-    WHERE ec.user_id = '$userId' OR gt.user_id = '$userId'
+    LEFT JOIN enrolled_courses ec ON gt.template_id = ec.template_id AND ec.user_id = ?
+    WHERE ec.user_id = ? OR gt.user_id = ?
     ORDER BY gt.created_at DESC
 ");
+$enrolledStmt->execute([$userId, $userId, $userId]);
 $dbEnrolled = [];
-while ($row = mysqli_fetch_assoc($enrolledCoursesQuery)) {
+
+$compStmt = $conn->prepare("SELECT component_name, weight FROM template_components WHERE template_id = ?");
+
+while ($row = $enrolledStmt->fetch()) {
     $tId = (int)$row['template_id'];
-    $compQuery = mysqli_query($conn, "SELECT component_name, weight FROM template_components WHERE template_id = '$tId'");
+    $compStmt->execute([$tId]);
     $comps = [];
-    while ($c = mysqli_fetch_assoc($compQuery)) {
+    while ($c = $compStmt->fetch()) {
         $comps[] = ['name' => $c['component_name'], 'weight' => (int)$c['weight']];
     }
     $dbEnrolled[] = [

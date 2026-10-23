@@ -14,19 +14,23 @@ $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email']);
 $userInitial = strtoupper(substr($userName, 0, 1));
 
-// Fetch published templates created by this professor from MySQL
-$templatesQuery = mysqli_query($conn, "
+// fetch published templates created by this professor
+$templatesStmt = $conn->prepare("
     SELECT template_id, course_code, course_title, class_code 
     FROM grade_templates 
-    WHERE user_id = '$userId'
+    WHERE user_id = ?
     ORDER BY created_at DESC
 ");
+$templatesStmt->execute([$userId]);
 $publishedTemplates = [];
-while ($row = mysqli_fetch_assoc($templatesQuery)) {
+
+$compStmt = $conn->prepare("SELECT component_name, weight FROM template_components WHERE template_id = ?");
+
+while ($row = $templatesStmt->fetch()) {
     $tId = (int)$row['template_id'];
-    $compQuery = mysqli_query($conn, "SELECT component_name, weight FROM template_components WHERE template_id = '$tId'");
+    $compStmt->execute([$tId]);
     $comps = [];
-    while ($c = mysqli_fetch_assoc($compQuery)) {
+    while ($c = $compStmt->fetch()) {
         $comps[] = ['name' => $c['component_name'], 'weight' => (int)$c['weight']];
     }
     $publishedTemplates[] = [

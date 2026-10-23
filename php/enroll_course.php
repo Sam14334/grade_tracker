@@ -16,19 +16,16 @@ if (empty($classCode)) {
     exit();
 }
 
-// 1. Check if class code exists in grade_templates
-$stmt = mysqli_prepare($conn, "SELECT template_id, course_code, course_title FROM grade_templates WHERE class_code = ?");
-mysqli_stmt_bind_param($stmt, "s", $classCode);
-mysqli_stmt_execute($stmt);
-$res = mysqli_stmt_get_result($stmt);
+// find template by class code
+$stmt = $conn->prepare("SELECT template_id, course_code, course_title FROM grade_templates WHERE class_code = ? LIMIT 1");
+$stmt->execute([$classCode]);
 
-if ($template = mysqli_fetch_assoc($res)) {
+if ($template = $stmt->fetch()) {
     $templateId = (int)$template['template_id'];
 
-    // 2. Insert enrollment (IGNORE skips if already enrolled)
-    $insert = mysqli_prepare($conn, "INSERT IGNORE INTO enrolled_courses (user_id, template_id) VALUES (?, ?)");
-    mysqli_stmt_bind_param($insert, "ii", $userId, $templateId);
-    mysqli_stmt_execute($insert);
+    // postgres on conflict do nothing replaces mysql insert ignore
+    $insert = $conn->prepare("INSERT INTO enrolled_courses (user_id, template_id) VALUES (?, ?) ON CONFLICT DO NOTHING");
+    $insert->execute([$userId, $templateId]);
 
     header("Location: ../student_dashboard.php?enrolled=success");
     exit();

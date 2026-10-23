@@ -29,13 +29,11 @@ if (isset($_POST['btnLogin'])) {
         }
     }
 
-    // 2. Find user by email and join roles
-    $stmt = mysqli_prepare($conn, "SELECT u.*, r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.email = ?");
-    mysqli_stmt_bind_param($stmt, "s", $email);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
+    // fetch user and join role
+    $stmt = $conn->prepare("SELECT u.*, r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.email = ? LIMIT 1");
+    $stmt->execute([$email]);
 
-    if ($user = mysqli_fetch_assoc($res)) {
+    if ($user = $stmt->fetch()) {
         // 3. Check password
         if (password_verify($password, $user['password_hash'])) {
             $roleName = $user['role_name']; // 'Professor' or 'Student'
@@ -60,7 +58,7 @@ if (isset($_POST['btnLogin'])) {
             $_SESSION['full_name'] = !empty($user['full_name']) ? $user['full_name'] : $user['email'];
             $_SESSION['role_id'] = $roleId;
 
-            // 5. Role-based redirect
+            // 5. Direct role-based redirect
             if ($isProfessor) {
                 header("Location: ../professor_dashboard.php");
             } else {
@@ -72,6 +70,14 @@ if (isset($_POST['btnLogin'])) {
             exit();
         }
     } else {
+        // redirect to otp verification if pending
+        $checkPending = $conn->prepare("SELECT email FROM otp_verifications WHERE email = ? LIMIT 1");
+        $checkPending->execute([$email]);
+        if ($checkPending->fetch()) {
+            $_SESSION['pending_otp_email'] = $email;
+            header("Location: ../otp.html?email=" . urlencode($email));
+            exit();
+        }
         header("Location: ../index.html?error=" . urlencode("No account found with this email address."));
         exit();
     }

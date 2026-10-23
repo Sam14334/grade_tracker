@@ -12,18 +12,23 @@ $userId = (int)$_SESSION['user_id'];
 $templateId = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
 
 if ($templateId > 0) {
-    // Check if the user is the creator of this template
-    $ownerQuery = mysqli_query($conn, "SELECT user_id FROM grade_templates WHERE template_id = '$templateId'");
-    $ownerRow = mysqli_fetch_assoc($ownerQuery);
+    // check if the user is the creator of this template
+    $ownerQuery = $conn->prepare("SELECT user_id FROM grade_templates WHERE template_id = ? LIMIT 1");
+    $ownerQuery->execute([$templateId]);
+    $ownerRow = $ownerQuery->fetch();
 
     if ($ownerRow && (int)$ownerRow['user_id'] === $userId) {
-        // Creator deleting their template: remove enrollments, components, and the template itself
-        mysqli_query($conn, "DELETE FROM enrolled_courses WHERE template_id = '$templateId'");
-        mysqli_query($conn, "DELETE FROM template_components WHERE template_id = '$templateId'");
-        mysqli_query($conn, "DELETE FROM grade_templates WHERE template_id = '$templateId' AND user_id = '$userId'");
+        $delEnroll = $conn->prepare("DELETE FROM enrolled_courses WHERE template_id = ?");
+        $delEnroll->execute([$templateId]);
+
+        $delComp = $conn->prepare("DELETE FROM template_components WHERE template_id = ?");
+        $delComp->execute([$templateId]);
+
+        $delTpl = $conn->prepare("DELETE FROM grade_templates WHERE template_id = ? AND user_id = ?");
+        $delTpl->execute([$templateId, $userId]);
     } else {
-        // Enrolled user un-enrolling: only remove their personal enrollment
-        mysqli_query($conn, "DELETE FROM enrolled_courses WHERE template_id = '$templateId' AND user_id = '$userId'");
+        $delEnroll = $conn->prepare("DELETE FROM enrolled_courses WHERE template_id = ? AND user_id = ?");
+        $delEnroll->execute([$templateId, $userId]);
     }
 }
 
