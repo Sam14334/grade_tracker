@@ -12,25 +12,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || is
     $userId = (int)$_SESSION['user_id'];
     $courseCode = trim($_POST['courseCode'] ?? '');
     $courseTitle = trim($_POST['courseTitle'] ?? '');
-    $courseUnit = $_POST['courseUnit'] ?? '';
-
-    // Match the form and NUMERIC(3,1): positive units with at most one decimal.
-    if (!is_string($courseUnit) ||
-        !preg_match('/^\d{1,2}(?:\.\d)?$/D', trim($courseUnit)) ||
-        (float)$courseUnit <= 0) {
-        header("Location: ../professor_dashboard.php?error=" . urlencode("Enter course units from 0.1 to 99.9, with at most one decimal place."));
-        exit();
-    }
-    $courseUnit = trim($courseUnit);
 
     // Generate class code, e.g. CS301-SEC5
     $cleanCode = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $courseCode));
     $classCode = $cleanCode . "-SEC" . rand(1, 9);
 
     // insert grade template and return generated id
-    $stmtTpl = $conn->prepare("INSERT INTO grade_templates (user_id, course_code, course_title, course_unit, class_code) VALUES (?, ?, ?, ?, ?) RETURNING template_id");
+    $stmtTpl = $conn->prepare("INSERT INTO grade_templates (user_id, course_code, course_title, class_code) VALUES (?, ?, ?, ?) RETURNING template_id");
 
-    if ($stmtTpl->execute([$userId, $courseCode, $courseTitle, $courseUnit, $classCode])) {
+    if ($stmtTpl->execute([$userId, $courseCode, $courseTitle, $classCode])) {
         $templateId = (int)$stmtTpl->fetchColumn();
 
         // insert components

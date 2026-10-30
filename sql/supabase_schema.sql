@@ -41,7 +41,6 @@ CREATE TABLE IF NOT EXISTS grade_templates (
     user_id INT REFERENCES users(user_id) ON DELETE CASCADE,
     course_code VARCHAR(20),
     course_title VARCHAR(100),
-    course_unit NUMERIC(3,1) NOT NULL DEFAULT 3.0 CHECK (course_unit > 0),
     class_code VARCHAR(30) UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
