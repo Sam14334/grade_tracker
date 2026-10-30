@@ -6,23 +6,13 @@ let targetGwaGoal = parseFloat(localStorage.getItem('targetGwaGoal')) || 1.45;
 
 let studentGradesData = (window.studentDashboardData?.enrolledCourses ?? []).map(course => ({
     id: course.templateId,
+    enrollmentId: course.enrollmentId,
     subject: course.code,
     title: course.title,
     grade: null,
     target: 1.00,
     units: course.units
 }));
-
-let upcomingExams = [
-    { id: 1, title: 'CS-301 Midterm', target: 'Target Weight: 30%', date: 'Sep 28', active: true },
-    { id: 2, title: 'BIO-105 Quiz', target: 'Target Weight: 15%', date: 'Oct 3', active: false },
-    { id: 3, title: 'MATH-201 Quiz', target: 'Target Weight: 15%', date: 'Oct 10', active: false }
-];
-
-let scheduleMatrix = [
-    { id: 1, time: '10:00 AM', mon: 'CS-301', tue: '', wed: 'CS-301', thu: '', fri: '', sat: 'IT-ELECT' },
-    { id: 2, time: '11:00 AM', mon: '', tue: 'BIO-105', wed: '', thu: 'BIO-105', fri: '', sat: 'IT-ELECT' }
-];
 
 let enrolledTemplates = [
     {
@@ -45,13 +35,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     renderGradesTable();
-    renderExamsList();
-    renderScheduleTimetable();
     renderTemplatesList();
     recalculateGradesAndStats(false);
 
-    if (window.location.hash === '#templates') {
-        switchTab('templates');
+    if (['#templates', '#grades'].includes(window.location.hash)) {
+        switchTab(window.location.hash.slice(1));
     }
 
     // The PHP dashboard uses inline handlers and submits enrollment to PHP.
@@ -61,12 +49,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('nav-dashboard').addEventListener('click', () => switchTab('dashboard'));
     document.getElementById('nav-grades').addEventListener('click', () => switchTab('grades'));
     document.getElementById('nav-templates').addEventListener('click', () => switchTab('templates'));
-    document.getElementById('nav-schedule').addEventListener('click', () => switchTab('schedule'));
     document.getElementById('nav-settings').addEventListener('click', () => switchTab('settings'));
 
-    // Dashboard quick actions
-    document.getElementById('addExamBtn').addEventListener('click', addExamPrompt);
-    document.getElementById('goToScheduleBtn').addEventListener('click', () => switchTab('schedule'));
 
     // Grades table actions
     document.getElementById('updateStatsBtn').addEventListener('click', () => recalculateGradesAndStats(true));
@@ -77,8 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('addComponentBtn').addEventListener('click', addComponentRow);
     document.getElementById('publishTemplateBtn').addEventListener('click', publishTemplate);
 
-    // Schedule actions
-    document.getElementById('addScheduleSlotBtn').addEventListener('click', addScheduleSlotPrompt);
 
     // Settings actions
     document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
@@ -100,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function switchTab(tabId) {
-    ['dashboard', 'grades', 'templates', 'schedule', 'settings'].forEach(id => {
+    ['dashboard', 'grades', 'templates', 'settings'].forEach(id => {
         const el = document.getElementById(`tab-content-${id}`);
         if (el) el.classList.add('hidden');
 
@@ -161,17 +143,6 @@ function recalculateGradesAndStats(showAlert = true) {
     document.querySelectorAll('.targetGwaSpan').forEach(span => {
         span.innerText = targetGwaGoal.toFixed(2);
     });
-
-    // Exam Predictor Calculation
-    const currentNum = parseFloat(calculatedGWA);
-    const activeExamWeight = 0.30;
-    const currentPercentage = 100 - ((currentNum - 1.0) * 20);
-    const targetPercentage = 100 - ((targetGwaGoal - 1.0) * 20);
-
-    let requiredPercentage = (targetPercentage - (currentPercentage * (1 - activeExamWeight))) / activeExamWeight;
-    requiredPercentage = Math.max(50, Math.min(100, requiredPercentage));
-
-    document.getElementById('reqExamScoreDisplay').innerText = gradedUnits > 0 ? `${requiredPercentage.toFixed(1)}%` : '--';
 
     const diagBox = document.getElementById('ruleDiagnosticBox');
     const diagText = document.getElementById('ruleDiagnosticText');
@@ -271,74 +242,6 @@ function renderGradesTable() {
     });
 }
 
-function renderExamsList() {
-    const container = document.getElementById('upcomingExamsContainer');
-    container.innerHTML = '';
-
-    upcomingExams.forEach(exam => {
-        const div = document.createElement('div');
-        div.className = "p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between";
-        div.innerHTML = `
-            <div>
-                <p class="font-bold text-xs text-slate-800">${exam.title}</p>
-                <p class="text-[10px] text-stone-500">${exam.target}</p>
-            </div>
-            <div class="flex items-center space-x-2">
-                <span class="text-xs font-bold ${exam.active ? 'text-maroon-800' : 'text-stone-700'} bg-white px-2.5 py-1 rounded-lg border border-stone-200">${exam.date}</span>
-                <button type="button" onclick="removeExam(${exam.id})" class="text-stone-400 hover:text-rose-600 text-xs px-1 cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-        `;
-        container.appendChild(div);
-    });
-}
-
-function renderScheduleTimetable() {
-    const dashTable = document.getElementById('dashboardScheduleMatrix');
-    const fullTable = document.getElementById('fullScheduleTableBody');
-
-    dashTable.innerHTML = '';
-    if (fullTable) fullTable.innerHTML = '';
-
-    scheduleMatrix.forEach(row => {
-        const dashTr = document.createElement('tr');
-        dashTr.innerHTML = `
-            <td class="p-2 border-r border-stone-200 bg-stone-50 font-semibold text-[11px]">${row.time}</td>
-            <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.mon)}">${row.mon}</td>
-            <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.tue)}">${row.tue}</td>
-            <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.wed)}">${row.wed}</td>
-            <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.thu)}">${row.thu}</td>
-            <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.fri)}">${row.fri}</td>
-            <td class="p-2 ${getSubjectBadgeStyle(row.sat)}">${row.sat}</td>
-        `;
-        dashTable.appendChild(dashTr);
-
-        const fullTr = document.createElement('tr');
-        fullTr.innerHTML = `
-            <td class="p-3 border-r border-stone-200 bg-stone-50 font-bold text-[11px]">${row.time}</td>
-            <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.mon)}">${row.mon}</td>
-            <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.tue)}">${row.tue}</td>
-            <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.wed)}">${row.wed}</td>
-            <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.thu)}">${row.thu}</td>
-            <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.fri)}">${row.fri}</td>
-            <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.sat)}">${row.sat}</td>
-            <td class="p-3 text-center">
-                <button type="button" onclick="removeScheduleSlot(${row.id})" class="text-rose-500 hover:text-rose-700 transition cursor-pointer">
-                    <i class="fa-solid fa-trash-can"></i>
-                </button>
-            </td>
-        `;
-        if (fullTable) fullTable.appendChild(fullTr);
-    });
-}
-
-function getSubjectBadgeStyle(subjectCode) {
-    if (!subjectCode) return '';
-    if (subjectCode.includes('CS')) return 'bg-maroon-50 text-maroon-900 font-bold text-[10px]';
-    if (subjectCode.includes('BIO')) return 'bg-amber-50 text-amber-900 font-bold text-[10px]';
-    if (subjectCode.includes('IT')) return 'bg-purple-50 text-purple-900 font-bold text-[10px]';
-    return 'bg-blue-50 text-blue-900 font-bold text-[10px]';
-}
-
 function renderTemplatesList() {
     if (window.studentDashboardData) return;
 
@@ -424,47 +327,31 @@ window.addSubjectRow = function() {
 }
 
 window.removeSubjectRow = function(id) {
-    if (confirm("Are you sure you want to remove this course from your tracker?")) {
-        studentGradesData = studentGradesData.filter(item => item.id !== id);
-        recalculateGradesAndStats(false);
+    const course = studentGradesData.find(item => item.id === id);
+    if (!course) return;
+
+    if (course.enrollmentId > 0) {
+        if (!confirm("Unenroll from this course? It will also be removed from your enrolled professor templates.")) return;
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'php/unenroll_course.php';
+        const fields = { btnUnenrollCourse: '1', template_id: id };
+        Object.entries(fields).forEach(([name, value]) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+        return;
     }
-}
 
-function addExamPrompt() {
-    const title = prompt("Enter Exam Title (e.g. CS-301 Final Exam):");
-    if (!title) return;
-    const date = prompt("Enter Scheduled Date (e.g. Oct 15):", "Oct 15") || "TBD";
-    const weight = prompt("Enter Exam Weight:", "Target Weight: 25%") || "Target Weight: 20%";
-
-    upcomingExams.push({ id: Date.now(), title, target: weight, date, active: true });
-    renderExamsList();
-}
-
-window.removeExam = function(id) {
-    upcomingExams = upcomingExams.filter(e => e.id !== id);
-    renderExamsList();
-}
-
-function addScheduleSlotPrompt() {
-    const time = prompt("Enter Time Slot (e.g. 01:00 PM):", "01:00 PM");
-    if (!time) return;
-
-    const mon = prompt("Monday Course Code:", "") || "";
-    const tue = prompt("Tuesday Course Code:", "") || "";
-    const wed = prompt("Wednesday Course Code:", "") || "";
-    const thu = prompt("Thursday Course Code:", "") || "";
-    const fri = prompt("Friday Course Code:", "") || "";
-    const sat = prompt("Saturday Course Code:", "") || "";
-
-    scheduleMatrix.push({ id: Date.now(), time, mon, tue, wed, thu, fri, sat });
-    renderScheduleTimetable();
-}
-
-window.removeScheduleSlot = function(id) {
-    if (confirm("Remove this time slot from your schedule?")) {
-        scheduleMatrix = scheduleMatrix.filter(s => s.id !== id);
-        renderScheduleTimetable();
-    }
+    if (!confirm("Remove this manually added course from your tracker?")) return;
+    studentGradesData = studentGradesData.filter(item => item.id !== id);
+    recalculateGradesAndStats(false);
 }
 
 function addComponentRow() {

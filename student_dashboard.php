@@ -162,98 +162,21 @@ while ($row = $enrolledStmt->fetch()) {
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-6 print-card">
-
-                    <div class="lg:col-span-5 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <h3 class="font-bold text-slate-800 text-base">Upcoming Exams</h3>
-                            <button onclick="addExamPrompt()" class="text-xs font-bold text-maroon-800 bg-maroon-50 hover:bg-maroon-100 px-2.5 py-1 rounded-full transition">
-                                + Add Exam
-                            </button>
-                        </div>
-
-                        <div class="space-y-2.5" id="upcomingExamsContainer">
-                        </div>
-
-                        <div class="p-4 bg-maroon-50 rounded-2xl border border-maroon-200 space-y-2">
-                            <p class="text-xs font-bold text-maroon-900 uppercase tracking-wider">Exam Target Predictor</p>
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs text-stone-600">Req. Exam Score for <strong class="targetGwaSpan text-maroon-900">1.45</strong> GWA Goal:</span>
-                                <span class="text-base font-black text-maroon-800" id="reqExamScoreDisplay">--</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="lg:col-span-7 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <h3 class="font-bold text-slate-800 text-base">Class Schedule Timetable</h3>
-                            <button onclick="switchTab('schedule')" class="text-xs font-bold text-maroon-800 hover:underline">Manage Schedule &rarr;</button>
-                        </div>
-
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-center border-collapse text-xs border border-stone-200">
-                                <thead>
-                                    <tr class="bg-stone-100 text-stone-600 font-bold border-b border-stone-200">
-                                        <th class="p-2 border-r border-stone-200 w-20">Time Slot</th>
-                                        <th class="p-2 border-r border-stone-200">Mon</th>
-                                        <th class="p-2 border-r border-stone-200">Tue</th>
-                                        <th class="p-2 border-r border-stone-200">Wed</th>
-                                        <th class="p-2 border-r border-stone-200">Thu</th>
-                                        <th class="p-2 border-r border-stone-200">Fri</th>
-                                        <th class="p-2">Sat</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-stone-200 text-slate-700" id="dashboardScheduleMatrix">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-2 print-card">
+                    <h4 class="font-bold text-slate-800 text-sm flex items-center justify-between">
+                        <span><i class="fa-solid fa-chart-column text-maroon-800 mr-2"></i>Subject GWA Analytics</span>
+                        <span class="text-[10px] text-stone-400">Live Statistics View</span>
+                    </h4>
+                    <div id="student_trend_chart" class="w-full h-52"></div>
                 </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-2 print-card">
-                        <h4 class="font-bold text-slate-800 text-sm flex items-center justify-between">
-                            <span><i class="fa-solid fa-chart-column text-maroon-800 mr-2"></i>Subject GWA Analytics</span>
-                            <span class="text-[10px] text-stone-400">Live Statistics View</span>
-                        </h4>
-                        <div id="student_trend_chart" class="w-full h-52"></div>
-                    </div>
-
-                    <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-3 print-card">
-                        <h4 class="font-bold text-slate-800 text-sm">
-                            <i class="fa-solid fa-award text-maroon-800 mr-2"></i>Academic Honors Criteria Breakdown
-                        </h4>
-                        <div class="space-y-2.5 text-xs">
-                            <div class="p-3 bg-maroon-50 rounded-xl border border-maroon-200 flex justify-between items-center">
-                                <div>
-                                    <p class="font-bold text-maroon-900">President's Lister Criteria</p>
-                                    <p class="text-maroon-700 text-[10px]">GWA ≤ 1.45 & No grade lower than 2.50</p>
-                                </div>
-                                <span class="font-black text-maroon-800 text-xs px-2 py-1 bg-white rounded border border-maroon-200">Top Tier</span>
-                            </div>
-
-                            <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 flex justify-between items-center">
-                                <div>
-                                    <p class="font-bold text-amber-900">Dean's Lister Criteria</p>
-                                    <p class="text-amber-700 text-[10px]">GWA ≤ 1.75</p>
-                                </div>
-                                <span class="font-black text-amber-800 text-xs px-2 py-1 bg-white rounded border border-amber-200">Second Tier</span>
-                            </div>
-
-                            <div class="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex justify-between items-center">
-                                <div>
-                                    <p class="font-bold text-emerald-900">Minimum Passing Grade</p>
-                                    <p class="text-emerald-700 text-[10px]">GWA ≤ 3.00 & No grade of 5.00 (Failed)</p>
-                                </div>
-                                <span class="font-black text-emerald-800 text-xs px-2 py-1 bg-white rounded border border-emerald-200">Passing Grade</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
             </div>
 
             <div id="tab-content-grades" class="hidden space-y-6">
+                <?php if (($_GET['unenrolled'] ?? '') === 'success'): ?>
+                    <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Course removed from your enrollments.</p>
+                <?php elseif (($_GET['unenrolled'] ?? '') === 'error'): ?>
+                    <p role="alert" class="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-sm">Could not remove the course. Please try again.</p>
+                <?php endif; ?>
                 <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
                     <div class="flex items-center justify-between">
                         <div>
@@ -317,7 +240,7 @@ while ($row = $enrolledStmt->fetch()) {
 
                     <form action="php/enroll_course.php" method="POST" class="flex gap-3 max-w-md">
                         <input type="text" name="templateCodeInput" id="templateCodeInput" placeholder="Enter Class Code (e.g. CS301-SEC1)" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-xs font-bold uppercase outline-none focus:border-maroon-800">
-                        <button type="submit" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition shrink-0">
+                        <button type="submit" name="btnEnrollCourse" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition shrink-0">
                             Enroll & Sync
                         </button>
                     </form>
