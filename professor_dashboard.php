@@ -16,7 +16,7 @@ $userInitial = strtoupper(substr($userName, 0, 1));
 
 // fetch published templates created by this professor
 $templatesStmt = $conn->prepare("
-    SELECT template_id, course_code, course_title, class_code 
+    SELECT template_id, course_code, course_title, course_unit, class_code
     FROM grade_templates 
     WHERE user_id = ?
     ORDER BY created_at DESC
@@ -37,6 +37,7 @@ while ($row = $templatesStmt->fetch()) {
         'id' => $tId,
         'code' => $row['course_code'],
         'title' => $row['course_title'],
+        'units' => (float)$row['course_unit'],
         'classCode' => $row['class_code'],
         'components' => $comps
     ];
@@ -150,6 +151,11 @@ while ($row = $templatesStmt->fetch()) {
                             </div>
                         </div>
 
+                        <div>
+                            <label for="courseUnitInput" class="block font-bold uppercase text-stone-600 mb-1">Course Units</label>
+                            <input type="number" name="courseUnit" id="courseUnitInput" value="3.0" min="0.1" max="99.9" step="0.1" required class="w-32 px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                        </div>
+
                         <div class="space-y-3 pt-2">
                             <label class="block font-bold uppercase text-stone-600">Grading System Components & Percentage Weights</label>
 
@@ -206,6 +212,10 @@ while ($row = $templatesStmt->fetch()) {
 
         document.addEventListener("DOMContentLoaded", () => {
             const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('error')) {
+                alert(urlParams.get('error'));
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
             if (urlParams.get('template') === 'success') {
                 const code = urlParams.get('code') ? `\nClass Sync Code: ${urlParams.get('code')}` : '';
                 alert(`Syllabus template published and saved to database!${code}\nShare this code with your students.`);
@@ -241,6 +251,7 @@ while ($row = $templatesStmt->fetch()) {
                             <span class="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">PUBLISHED SYLLABUS</span>
                             <h4 class="font-extrabold text-slate-900 text-base mt-1">${tpl.code}</h4>
                             <p class="text-xs text-stone-500 font-medium">${tpl.title}</p>
+                            <p class="text-xs text-stone-500 font-medium">${tpl.units.toFixed(1)} units</p>
                         </div>
                         <div class="text-right flex items-center space-x-3">
                             <div>
