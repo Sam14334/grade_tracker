@@ -1,4 +1,6 @@
 -- Supabase PostgreSQL Schema (Base Schema - No Data)
+-- Matches the live public schema inspected on 2026-10-30.
+-- For fresh setup; CREATE TABLE IF NOT EXISTS does not migrate existing tables.
 
 CREATE TABLE IF NOT EXISTS roles (
     role_id INT PRIMARY KEY,
@@ -42,7 +44,8 @@ CREATE TABLE IF NOT EXISTS grade_templates (
     course_code VARCHAR(20),
     course_title VARCHAR(100),
     class_code VARCHAR(30) UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    course_unit NUMERIC(3,1) NOT NULL DEFAULT 3.0 CHECK (course_unit > 0)
 );
 
 CREATE INDEX IF NOT EXISTS idx_grade_templates_user ON grade_templates(user_id);
@@ -68,9 +71,10 @@ CREATE TABLE IF NOT EXISTS enrolled_courses (
 CREATE INDEX IF NOT EXISTS idx_enrolled_courses_user ON enrolled_courses(user_id);
 CREATE INDEX IF NOT EXISTS idx_enrolled_courses_template ON enrolled_courses(template_id);
 
-ALTER TABLE roles DISABLE ROW LEVEL SECURITY;
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE otp_verifications DISABLE ROW LEVEL SECURITY;
-ALTER TABLE grade_templates DISABLE ROW LEVEL SECURITY;
-ALTER TABLE template_components DISABLE ROW LEVEL SECURITY;
-ALTER TABLE enrolled_courses DISABLE ROW LEVEL SECURITY;
+-- The live database enables RLS on all six tables and defines no RLS policies.
+ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE otp_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE grade_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE template_components ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enrolled_courses ENABLE ROW LEVEL SECURITY;

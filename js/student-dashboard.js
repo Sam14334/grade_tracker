@@ -4,12 +4,14 @@ google.charts.setOnLoadCallback(() => renderStudentTrendChart());
 // Load saved target GWA goal or default to 1.45
 let targetGwaGoal = parseFloat(localStorage.getItem('targetGwaGoal')) || 1.45;
 
-let studentGradesData = [
-    { id: 1, subject: 'CS-301', title: 'Software Engineering', grade: 1.25, target: 1.00, units: 3.0 },
-    { id: 2, subject: 'BIO-105', title: 'General Biology', grade: 1.50, target: 1.25, units: 3.0 },
-    { id: 3, subject: 'MATH-201', title: 'Discrete Mathematics', grade: 1.25, target: 1.25, units: 3.0 },
-    { id: 4, subject: 'IT-ELECT', title: 'Web Systems Development', grade: 1.00, target: 1.00, units: 3.0 }
-];
+let studentGradesData = (window.studentDashboardData?.enrolledCourses ?? []).map(course => ({
+    id: course.templateId,
+    subject: course.code,
+    title: course.title,
+    grade: null,
+    target: 1.00,
+    units: course.units
+}));
 
 let upcomingExams = [
     { id: 1, title: 'CS-301 Midterm', target: 'Target Weight: 30%', date: 'Sep 28', active: true },
@@ -123,34 +125,37 @@ function recalculateGradesAndStats(showAlert = true) {
     const inputs = document.querySelectorAll('.grade-input');
     let totalWeightedGrades = 0;
     let totalUnits = 0;
+    let gradedUnits = 0;
     let hasGradeBelow250 = false;
 
-    if (inputs.length > 0) {
-        inputs.forEach(input => {
-            const val = parseFloat(input.value) || 3.00;
-            const id = parseInt(input.getAttribute('data-id'));
-            const units = parseFloat(input.getAttribute('data-units')) || 3.0;
-
-            const item = studentGradesData.find(g => g.id === id);
-            if (item) item.grade = val;
-
-            if (val > 2.50) hasGradeBelow250 = true;
-
-            totalWeightedGrades += (val * units);
-            totalUnits += units;
-        });
-    } else {
-        studentGradesData.forEach(item => {
-            if (item.grade > 2.50) hasGradeBelow250 = true;
-            totalWeightedGrades += (item.grade * item.units);
-            totalUnits += item.units;
-        });
+    for (const input of document.querySelectorAll('.grade-input, .target-grade-input')) {
+        if (!input.checkValidity()) {
+            input.reportValidity();
+            return;
+        }
     }
 
-    const calculatedGWA = totalUnits > 0 ? (totalWeightedGrades / totalUnits).toFixed(2) : "0.00";
+    inputs.forEach(input => {
+        const item = studentGradesData.find(g => g.id === Number(input.getAttribute('data-id')));
+        if (item) item.grade = input.value === '' ? null : Number(input.value);
+    });
+
+    document.querySelectorAll('.target-grade-input').forEach(input => {
+        const item = studentGradesData.find(g => g.id === Number(input.getAttribute('data-id')));
+        if (item) item.target = Number(input.value);
+    });
+
+    studentGradesData.forEach(item => {
+        totalUnits += item.units;
+        if (item.grade === null) return;
+        if (item.grade > 2.50) hasGradeBelow250 = true;
+        totalWeightedGrades += item.grade * item.units;
+        gradedUnits += item.units;
+    });
+
+    const calculatedGWA = gradedUnits > 0 ? (totalWeightedGrades / gradedUnits).toFixed(2) : '--';
 
     document.getElementById('calcGwaVal').innerText = calculatedGWA;
-    document.getElementById('gwaValueDisplay').innerText = calculatedGWA;
     document.getElementById('totalUnitsDisplay').innerText = totalUnits.toFixed(1);
 
     document.querySelectorAll('.targetGwaSpan').forEach(span => {
@@ -166,7 +171,7 @@ function recalculateGradesAndStats(showAlert = true) {
     let requiredPercentage = (targetPercentage - (currentPercentage * (1 - activeExamWeight))) / activeExamWeight;
     requiredPercentage = Math.max(50, Math.min(100, requiredPercentage));
 
-    document.getElementById('reqExamScoreDisplay').innerText = `${requiredPercentage.toFixed(1)}%`;
+    document.getElementById('reqExamScoreDisplay').innerText = gradedUnits > 0 ? `${requiredPercentage.toFixed(1)}%` : '--';
 
     const diagBox = document.getElementById('ruleDiagnosticBox');
     const diagText = document.getElementById('ruleDiagnosticText');
@@ -174,7 +179,12 @@ function recalculateGradesAndStats(showAlert = true) {
 
     badge.innerText = `Target Goal: GWA ≤ ${targetGwaGoal.toFixed(2)}`;
 
-    if (parseFloat(calculatedGWA) <= targetGwaGoal && !hasGradeBelow250) {
+    if (gradedUnits === 0 || gradedUnits < totalUnits) {
+        diagBox.className = "bg-stone-50 border-l-4 border-stone-400 p-4 rounded-2xl flex items-start space-x-3 shadow-sm";
+        diagText.textContent = gradedUnits === 0
+            ? 'Enter grades for your enrolled courses to calculate your GWA.'
+            : `Current Estimated GWA: ${calculatedGWA}. Enter the remaining grades to check your target qualification.`;
+    } else if (parseFloat(calculatedGWA) <= targetGwaGoal && !hasGradeBelow250) {
         diagBox.className = "bg-amber-50 border-l-4 border-amber-500 p-4 rounded-2xl flex items-start space-x-3 shadow-sm transition-all duration-300";
         diagText.innerHTML = `Current Estimated GWA: <strong class="text-maroon-900">${calculatedGWA}</strong> (Qualifies for Target Goal GWA ≤ <strong>${targetGwaGoal.toFixed(2)}</strong>). All grades are 2.50 or higher.`;
     } else if (parseFloat(calculatedGWA) <= targetGwaGoal && hasGradeBelow250) {
@@ -214,25 +224,41 @@ function saveSettings() {
     }
 }
 
+function escapeGradeText(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+}
+
 function renderGradesTable() {
     const tbody = document.getElementById('gradeInputTableBody');
     tbody.innerHTML = '';
 
+    if (studentGradesData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-stone-500">No courses yet. Enroll using your professor\'s class code in Professor Templates.</td></tr>';
+        return;
+    }
+
     studentGradesData.forEach(item => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="p-3 font-bold text-maroon-900">${item.subject}</td>
-            <td class="p-3 font-medium">${item.title}</td>
+            <td class="p-3 font-bold text-maroon-900">${escapeGradeText(item.subject)}</td>
+            <td class="p-3 font-medium">${escapeGradeText(item.title)}</td>
             <td class="p-3 font-bold">${item.units.toFixed(1)}</td>
             <td class="p-3">
-                <input type="number" step="0.25" min="1.00" max="5.00" value="${item.grade.toFixed(2)}"
+                <input type="number" step="0.25" min="1.00" max="5.00" value="${item.grade === null ? '' : item.grade.toFixed(2)}" placeholder="Enter grade"
                        class="grade-input w-28 px-3 py-1.5 rounded-lg border border-stone-300 font-bold text-xs focus:border-maroon-800 outline-none"
-                       data-id="${item.id}" data-subject="${item.subject}" data-units="${item.units}">
+                       data-id="${item.id}" data-units="${item.units}">
             </td>
             <td class="p-3">
-                <span class="${item.grade <= 2.50 ? 'text-emerald-700' : 'text-rose-700'} font-bold text-[11px]">
-                    <i class="fa-solid ${item.grade <= 2.50 ? 'fa-check-circle' : 'fa-triangle-exclamation'} mr-1"></i>
-                    ${item.grade <= 2.50 ? 'PL Valid (≤ 2.50)' : 'PL Ineligible (> 2.50)'}
+                <input type="number" step="0.25" min="1.00" max="5.00" value="${item.target.toFixed(2)}" required
+                       class="target-grade-input w-28 px-3 py-1.5 rounded-lg border border-stone-300 font-bold text-xs focus:border-maroon-800 outline-none"
+                       data-id="${item.id}">
+            </td>
+            <td class="p-3">
+                <span class="${item.grade === null ? 'text-stone-500' : item.grade <= 2.50 ? 'text-emerald-700' : 'text-rose-700'} font-bold text-[11px]">
+                    <i class="fa-solid ${item.grade === null ? 'fa-minus' : item.grade <= 2.50 ? 'fa-check-circle' : 'fa-triangle-exclamation'} mr-1"></i>
+                    ${item.grade === null ? 'Not entered' : item.grade <= 2.50 ? 'PL Valid (≤ 2.50)' : 'PL Ineligible (> 2.50)'}
                 </span>
             </td>
             <td class="p-3 text-center">

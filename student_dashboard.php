@@ -9,15 +9,15 @@ $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email']);
 $userInitial = strtoupper(substr($userName, 0, 1));
 
-// fetch enrolled or created courses for this student
+// Fetch only courses enrolled by the signed-in student.
 $enrolledStmt = $conn->prepare("
-    SELECT DISTINCT gt.template_id, gt.course_code, gt.course_title, gt.class_code, ec.enrollment_id, gt.created_at 
+    SELECT gt.template_id, gt.course_code, gt.course_title, gt.course_unit, gt.class_code, ec.enrollment_id, gt.created_at
     FROM grade_templates gt
-    LEFT JOIN enrolled_courses ec ON gt.template_id = ec.template_id AND ec.user_id = ?
-    WHERE ec.user_id = ? OR gt.user_id = ?
+    JOIN enrolled_courses ec ON gt.template_id = ec.template_id
+    WHERE ec.user_id = ?
     ORDER BY gt.created_at DESC
 ");
-$enrolledStmt->execute([$userId, $userId, $userId]);
+$enrolledStmt->execute([$userId]);
 $dbEnrolled = [];
 
 $compStmt = $conn->prepare("SELECT component_name, weight FROM template_components WHERE template_id = ?");
@@ -35,6 +35,7 @@ while ($row = $enrolledStmt->fetch()) {
         'enrollmentId' => (int)($row['enrollment_id'] ?? 0),
         'code' => $row['course_code'],
         'title' => $row['course_title'],
+        'units' => (float)$row['course_unit'],
         'classCode' => $row['class_code'],
         'components' => $comps
     ];
@@ -157,7 +158,7 @@ while ($row = $enrolledStmt->fetch()) {
                             <span class="font-bold text-sm" id="bannerTargetTitle">Academic Honor Qualification Status</span>
                             <span class="font-black text-emerald-700 text-xs" id="bannerTargetBadge">Target Goal: GWA ≤ 1.45</span>
                         </div>
-                        <p id="ruleDiagnosticText">Current Estimated GWA: <strong class="text-maroon-900" id="gwaValueDisplay">1.25</strong> (Qualifies for Target Goal GWA ≤ <span class="targetGwaSpan">1.45</span>).</p>
+                        <p id="ruleDiagnosticText">Enter grades for your enrolled courses to calculate your GWA.</p>
                     </div>
                 </div>
 
@@ -178,7 +179,7 @@ while ($row = $enrolledStmt->fetch()) {
                             <p class="text-xs font-bold text-maroon-900 uppercase tracking-wider">Exam Target Predictor</p>
                             <div class="flex items-center justify-between">
                                 <span class="text-xs text-stone-600">Req. Exam Score for <strong class="targetGwaSpan text-maroon-900">1.45</strong> GWA Goal:</span>
-                                <span class="text-base font-black text-maroon-800" id="reqExamScoreDisplay">84.5%</span>
+                                <span class="text-base font-black text-maroon-800" id="reqExamScoreDisplay">--</span>
                             </div>
                         </div>
                     </div>
@@ -257,7 +258,7 @@ while ($row = $enrolledStmt->fetch()) {
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="font-bold text-slate-800 text-lg">Input & Calculate Subject Grades</h3>
-                            <p class="text-xs text-stone-500">Enter your numerical grades (1.00 - 5.00) to update your overall statistics across the system.</p>
+                            <p class="text-xs text-stone-500">Your enrolled courses appear below. Enter grades (1.00 - 5.00) to calculate your GWA. Blank grades are excluded; entered grades last until you reload this page.</p>
                         </div>
                         <button onclick="recalculateGradesAndStats()" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-2">
                             <i class="fa-solid fa-rotate"></i>
@@ -273,6 +274,7 @@ while ($row = $enrolledStmt->fetch()) {
                                     <th class="p-3">Course Title</th>
                                     <th class="p-3">Units</th>
                                     <th class="p-3">Grade Scale (1.00 - 5.00)</th>
+                                    <th class="p-3">Target Grade (1.00 - 5.00)</th>
                                     <th class="p-3">Status Diagnostic</th>
                                     <th class="p-3 text-center">Action</th>
                                 </tr>
@@ -286,11 +288,11 @@ while ($row = $enrolledStmt->fetch()) {
                         <div class="flex space-x-6 text-xs">
                             <div>
                                 <span class="text-stone-500 font-medium">Total Units:</span>
-                                <span class="font-bold text-slate-800 ml-1" id="totalUnitsDisplay">12.0</span>
+                                <span class="font-bold text-slate-800 ml-1" id="totalUnitsDisplay">0.0</span>
                             </div>
                             <div>
                                 <span class="text-stone-500 font-medium">Calculated GWA:</span>
-                                <span class="font-black text-maroon-900 ml-1 text-sm" id="calcGwaVal">1.25</span>
+                                <span class="font-black text-maroon-900 ml-1 text-sm" id="calcGwaVal">--</span>
                             </div>
                         </div>
 
@@ -334,6 +336,7 @@ while ($row = $enrolledStmt->fetch()) {
                                                 <span class="text-[10px] font-bold text-maroon-800 bg-maroon-50 px-2 py-0.5 rounded-full border border-maroon-200">ACTIVE SYNC</span>
                                                 <h4 class="font-extrabold text-slate-900 text-base mt-1"><?php echo htmlspecialchars($template['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></h4>
                                                 <p class="text-xs text-stone-500 font-medium"><?php echo htmlspecialchars($template['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?></p>
+                                                <p class="text-xs text-stone-500 font-medium"><?php echo number_format($template['units'], 1); ?> units</p>
                                             </div>
                                             <div class="text-right">
                                                 <span class="text-[10px] uppercase font-bold text-stone-400 block">Class Code</span>
@@ -363,7 +366,10 @@ while ($row = $enrolledStmt->fetch()) {
 
     <!-- External Linked JavaScript File -->
     <script>
-        window.studentDashboardData = { serverRenderedTemplates: true };
+        window.studentDashboardData = {
+            serverRenderedTemplates: true,
+            enrolledCourses: <?php echo json_encode($dbEnrolled, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE); ?>
+        };
     </script>
     <script src="./js/student-dashboard.js?v=<?php echo filemtime(__DIR__ . '/js/student-dashboard.js'); ?>"></script>
 </body>
