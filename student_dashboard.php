@@ -129,14 +129,11 @@ while ($row = $enrolledStmt->fetch()) {
                     <i class="fa-solid fa-sliders text-sm"></i>
                     <span>Professor Templates</span>
                 </button>
-<<<<<<< Updated upstream
-=======
 
                 <button onclick="switchTab('predictor')" id="nav-predictor" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
                     <i class="fa-solid fa-calculator text-sm"></i>
                     <span>Grade Predictor</span>
                 </button>
->>>>>>> Stashed changes
             </div>
 
             <div class="pt-4 border-t border-stone-300/80 text-[11px] text-stone-500 font-medium">
@@ -170,14 +167,6 @@ while ($row = $enrolledStmt->fetch()) {
                     </div>
                 </div>
 
-<<<<<<< Updated upstream
-                <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-2 print-card">
-                    <h4 class="font-bold text-slate-800 text-sm flex items-center justify-between">
-                        <span><i class="fa-solid fa-chart-column text-maroon-800 mr-2"></i>Subject GWA Analytics</span>
-                        <span class="text-[10px] text-stone-400">Live Statistics View</span>
-                    </h4>
-                    <div id="student_trend_chart" class="w-full h-52"></div>
-=======
                 <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm grid grid-cols-1 gap-6 print-card">
                     <div class="space-y-4 max-w-xl">
                         <div class="flex items-center justify-between">
@@ -198,7 +187,6 @@ while ($row = $enrolledStmt->fetch()) {
                             </div>
                         </div>
                     </div>
->>>>>>> Stashed changes
                 </div>
             </div>
 
@@ -271,18 +259,12 @@ while ($row = $enrolledStmt->fetch()) {
 
                     <form action="php/enroll_course.php" method="POST" class="flex gap-3 max-w-md">
                         <input type="text" name="templateCodeInput" id="templateCodeInput" placeholder="Enter Class Code (e.g. CS301-SEC1)" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-xs font-bold uppercase outline-none focus:border-maroon-800">
-<<<<<<< Updated upstream
-                        <button type="submit" name="btnEnrollCourse" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition shrink-0">
-=======
                         <button type="submit" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition shrink-0 cursor-pointer">
->>>>>>> Stashed changes
                             Enroll & Sync
                         </button>
                     </form>
                 </div>
-<<<<<<< Updated upstream
                             
-=======
 
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <div class="lg:col-span-7 bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-5">
@@ -346,7 +328,6 @@ while ($row = $enrolledStmt->fetch()) {
                         </form>
                     </div>
 
->>>>>>> Stashed changes
                     <div class="lg:col-span-5 space-y-4">
                         <h3 class="font-bold text-slate-800 text-base">Enrolled Professor Templates</h3>
                         <div class="space-y-3" id="publishedTemplatesList">
@@ -382,9 +363,6 @@ while ($row = $enrolledStmt->fetch()) {
                     </div>
             </div>
 
-<<<<<<< Updated upstream
-            
-=======
             <!-- Grade Predictor Tab -->
             <div id="tab-content-predictor" class="hidden space-y-6">
                 <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-5">
@@ -447,7 +425,6 @@ while ($row = $enrolledStmt->fetch()) {
                     </div>
                 </div>
             </div>
->>>>>>> Stashed changes
 
         </main>
     </div>
@@ -918,7 +895,7 @@ while ($row = $enrolledStmt->fetch()) {
         }
 
         function logout() { window.location.href = 'php/logout.php'; }
->>>>>>> Stashed changes
+
     </script>
     <script src="./js/student-dashboard.js?v=<?php echo filemtime(__DIR__ . '/js/student-dashboard.js'); ?>"></script>
 </body>
