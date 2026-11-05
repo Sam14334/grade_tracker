@@ -9,24 +9,20 @@ $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email']);
 $userInitial = strtoupper(substr($userName, 0, 1));
 
-// Fetch only courses enrolled by the signed-in student.
-$enrolledStmt = $conn->prepare("
-    SELECT gt.template_id, gt.course_code, gt.course_title, gt.course_unit, gt.class_code, ec.enrollment_id, gt.created_at
+// Fetch enrolled or created courses for this student from database
+$enrolledCoursesQuery = mysqli_query($conn, "
+    SELECT DISTINCT gt.template_id, gt.course_code, gt.course_title, gt.class_code, ec.enrollment_id 
     FROM grade_templates gt
-    JOIN enrolled_courses ec ON gt.template_id = ec.template_id
-    WHERE ec.user_id = ?
+    LEFT JOIN enrolled_courses ec ON gt.template_id = ec.template_id AND ec.user_id = '$userId'
+    WHERE ec.user_id = '$userId' OR gt.user_id = '$userId'
     ORDER BY gt.created_at DESC
 ");
-$enrolledStmt->execute([$userId]);
 $dbEnrolled = [];
-
-$compStmt = $conn->prepare("SELECT component_name, weight FROM template_components WHERE template_id = ?");
-
-while ($row = $enrolledStmt->fetch()) {
+while ($row = mysqli_fetch_assoc($enrolledCoursesQuery)) {
     $tId = (int)$row['template_id'];
-    $compStmt->execute([$tId]);
+    $compQuery = mysqli_query($conn, "SELECT component_name, weight FROM template_components WHERE template_id = '$tId'");
     $comps = [];
-    while ($c = $compStmt->fetch()) {
+    while ($c = mysqli_fetch_assoc($compQuery)) {
         $comps[] = ['name' => $c['component_name'], 'weight' => (int)$c['weight']];
     }
     $dbEnrolled[] = [
@@ -35,13 +31,12 @@ while ($row = $enrolledStmt->fetch()) {
         'enrollmentId' => (int)($row['enrollment_id'] ?? 0),
         'code' => $row['course_code'],
         'title' => $row['course_title'],
-        'units' => (float)$row['course_unit'],
         'classCode' => $row['class_code'],
         'components' => $comps
     ];
 }
 ?>
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -115,24 +110,29 @@ while ($row = $enrolledStmt->fetch()) {
     <div class="flex flex-1 w-full">
         <aside class="w-64 bg-[#f1ede6] border-r border-stone-300 p-4 shrink-0 flex flex-col justify-between hidden md:flex no-print">
             <div class="space-y-1">
-                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full text-left px-4 py-3 rounded-xl font-bold text-xs flex items-center space-x-3 bg-maroon-100 text-maroon-900 border border-maroon-200 cursor-pointer">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full text-left px-4 py-3 rounded-xl font-bold text-xs flex items-center space-x-3 bg-maroon-100 text-maroon-900 border border-maroon-200">
                     <i class="fa-solid fa-table-cells-large text-sm"></i>
                     <span>Dashboard</span>
                 </button>
 
-                <button onclick="switchTab('grades')" id="nav-grades" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
+                <button onclick="switchTab('grades')" id="nav-grades" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3">
                     <i class="fa-solid fa-pen-to-square text-sm"></i>
                     <span>Grade Entry & Calculator</span>
                 </button>
 
-                <button onclick="switchTab('templates')" id="nav-templates" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
+                <button onclick="switchTab('templates')" id="nav-templates" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3">
                     <i class="fa-solid fa-sliders text-sm"></i>
                     <span>Professor Templates</span>
                 </button>
 
-                <button onclick="switchTab('predictor')" id="nav-predictor" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
-                    <i class="fa-solid fa-calculator text-sm"></i>
-                    <span>Grade Predictor</span>
+                <button onclick="switchTab('schedule')" id="nav-schedule" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3">
+                    <i class="fa-solid fa-calendar-days text-sm"></i>
+                    <span>Class Schedule</span>
+                </button>
+
+                <button onclick="switchTab('settings')" id="nav-settings" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3">
+                    <i class="fa-solid fa-gear text-sm"></i>
+                    <span>Settings</span>
                 </button>
             </div>
 
@@ -148,7 +148,7 @@ while ($row = $enrolledStmt->fetch()) {
                 <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Welcome, <?php echo $userName; ?>!</h2>
                 <div class="text-right">
                     <span class="text-xs sm:text-sm font-semibold text-stone-500">Sep 25, 2026</span>
-                    <button onclick="window.print()" class="block text-[11px] text-maroon-800 font-bold hover:underline no-print cursor-pointer">
+                    <button onclick="window.print()" class="block text-[11px] text-maroon-800 font-bold hover:underline no-print">
                         <i class="fa-solid fa-print mr-1"></i>Export Target PDF
                     </button>
                 </div>
@@ -163,15 +163,16 @@ while ($row = $enrolledStmt->fetch()) {
                             <span class="font-bold text-sm" id="bannerTargetTitle">Academic Honor Qualification Status</span>
                             <span class="font-black text-emerald-700 text-xs" id="bannerTargetBadge">Target Goal: GWA ≤ 1.45</span>
                         </div>
-                        <p id="ruleDiagnosticText">Enter grades for your enrolled courses to calculate your GWA.</p>
+                        <p id="ruleDiagnosticText">Current Estimated GWA: <strong class="text-maroon-900" id="gwaValueDisplay">1.25</strong> (Qualifies for Target Goal GWA ≤ <span class="targetGwaSpan">1.45</span>).</p>
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm grid grid-cols-1 gap-6 print-card">
-                    <div class="space-y-4 max-w-xl">
+                <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-6 print-card">
+
+                    <div class="lg:col-span-5 space-y-4">
                         <div class="flex items-center justify-between">
                             <h3 class="font-bold text-slate-800 text-base">Upcoming Exams</h3>
-                            <button type="button" onclick="addExamPrompt()" class="text-xs font-bold text-maroon-800 bg-maroon-50 hover:bg-maroon-100 px-2.5 py-1 rounded-full transition cursor-pointer">
+                            <button onclick="addExamPrompt()" class="text-xs font-bold text-maroon-800 bg-maroon-50 hover:bg-maroon-100 px-2.5 py-1 rounded-full transition">
                                 + Add Exam
                             </button>
                         </div>
@@ -187,22 +188,84 @@ while ($row = $enrolledStmt->fetch()) {
                             </div>
                         </div>
                     </div>
+
+                    <div class="lg:col-span-7 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-bold text-slate-800 text-base">Class Schedule Timetable</h3>
+                            <button onclick="switchTab('schedule')" class="text-xs font-bold text-maroon-800 hover:underline">Manage Schedule &rarr;</button>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-center border-collapse text-xs border border-stone-200">
+                                <thead>
+                                    <tr class="bg-stone-100 text-stone-600 font-bold border-b border-stone-200">
+                                        <th class="p-2 border-r border-stone-200 w-20">Time Slot</th>
+                                        <th class="p-2 border-r border-stone-200">Mon</th>
+                                        <th class="p-2 border-r border-stone-200">Tue</th>
+                                        <th class="p-2 border-r border-stone-200">Wed</th>
+                                        <th class="p-2 border-r border-stone-200">Thu</th>
+                                        <th class="p-2 border-r border-stone-200">Fri</th>
+                                        <th class="p-2">Sat</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-stone-200 text-slate-700" id="dashboardScheduleMatrix">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-2 print-card">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center justify-between">
+                            <span><i class="fa-solid fa-chart-column text-maroon-800 mr-2"></i>Subject GWA Analytics</span>
+                            <span class="text-[10px] text-stone-400">Live Statistics View</span>
+                        </h4>
+                        <div id="student_trend_chart" class="w-full h-52"></div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-3 print-card">
+                        <h4 class="font-bold text-slate-800 text-sm">
+                            <i class="fa-solid fa-award text-maroon-800 mr-2"></i>Academic Honors Criteria Breakdown
+                        </h4>
+                        <div class="space-y-2.5 text-xs">
+                            <div class="p-3 bg-maroon-50 rounded-xl border border-maroon-200 flex justify-between items-center">
+                                <div>
+                                    <p class="font-bold text-maroon-900">President's Lister Criteria</p>
+                                    <p class="text-maroon-700 text-[10px]">GWA ≤ 1.45 & No grade lower than 2.50</p>
+                                </div>
+                                <span class="font-black text-maroon-800 text-xs px-2 py-1 bg-white rounded border border-maroon-200">Top Tier</span>
+                            </div>
+
+                            <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 flex justify-between items-center">
+                                <div>
+                                    <p class="font-bold text-amber-900">Dean's Lister Criteria</p>
+                                    <p class="text-amber-700 text-[10px]">GWA ≤ 1.75</p>
+                                </div>
+                                <span class="font-black text-amber-800 text-xs px-2 py-1 bg-white rounded border border-amber-200">Second Tier</span>
+                            </div>
+
+                            <div class="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex justify-between items-center">
+                                <div>
+                                    <p class="font-bold text-emerald-900">Minimum Passing Grade</p>
+                                    <p class="text-emerald-700 text-[10px]">GWA ≤ 3.00 & No grade of 5.00 (Failed)</p>
+                                </div>
+                                <span class="font-black text-emerald-800 text-xs px-2 py-1 bg-white rounded border border-emerald-200">Passing Grade</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <div id="tab-content-grades" class="hidden space-y-6">
-                <?php if (($_GET['unenrolled'] ?? '') === 'success'): ?>
-                    <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Course removed from your enrollments.</p>
-                <?php elseif (($_GET['unenrolled'] ?? '') === 'error'): ?>
-                    <p role="alert" class="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-sm">Could not remove the course. Please try again.</p>
-                <?php endif; ?>
                 <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="font-bold text-slate-800 text-lg">Input & Calculate Subject Grades</h3>
-                            <p class="text-xs text-stone-500">Your enrolled courses appear below. Enter grades (1.00 - 5.00) to calculate your GWA. Blank grades are excluded; entered grades last until you reload this page.</p>
+                            <p class="text-xs text-stone-500">Enter your numerical grades (1.00 - 5.00) to update your overall statistics across the system.</p>
                         </div>
-                        <button type="button" onclick="recalculateGradesAndStats()" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-2 cursor-pointer">
+                        <button onclick="recalculateGradesAndStats()" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-2">
                             <i class="fa-solid fa-rotate"></i>
                             <span>Update Statistics</span>
                         </button>
@@ -216,7 +279,6 @@ while ($row = $enrolledStmt->fetch()) {
                                     <th class="p-3">Course Title</th>
                                     <th class="p-3">Units</th>
                                     <th class="p-3">Grade Scale (1.00 - 5.00)</th>
-                                    <th class="p-3">Target Grade (1.00 - 5.00)</th>
                                     <th class="p-3">Status Diagnostic</th>
                                     <th class="p-3 text-center">Action</th>
                                 </tr>
@@ -230,15 +292,15 @@ while ($row = $enrolledStmt->fetch()) {
                         <div class="flex space-x-6 text-xs">
                             <div>
                                 <span class="text-stone-500 font-medium">Total Units:</span>
-                                <span class="font-bold text-slate-800 ml-1" id="totalUnitsDisplay">0.0</span>
+                                <span class="font-bold text-slate-800 ml-1" id="totalUnitsDisplay">12.0</span>
                             </div>
                             <div>
                                 <span class="text-stone-500 font-medium">Calculated GWA:</span>
-                                <span class="font-black text-maroon-900 ml-1 text-sm" id="calcGwaVal">--</span>
+                                <span class="font-black text-maroon-900 ml-1 text-sm" id="calcGwaVal">1.25</span>
                             </div>
                         </div>
 
-                        <button type="button" onclick="addSubjectRow()" class="px-3 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs rounded-lg transition cursor-pointer">
+                        <button onclick="addSubjectRow()" class="px-3 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs rounded-lg transition">
                             + Add Course Row
                         </button>
                     </div>
@@ -246,11 +308,6 @@ while ($row = $enrolledStmt->fetch()) {
             </div>
 
             <div id="tab-content-templates" class="hidden space-y-6">
-                <?php if (isset($_GET['error']) && is_string($_GET['error'])): ?>
-                    <p role="alert" class="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-sm"><?php echo htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8'); ?></p>
-                <?php elseif (($_GET['enrolled'] ?? '') === 'success'): ?>
-                    <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Class enrolled successfully. Your professor's grading template is shown below.</p>
-                <?php endif; ?>
                 <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
                     <h3 class="font-bold text-slate-800 text-lg">Inherit & Sync Class Grading Code</h3>
                     <p class="text-xs text-stone-500 leading-relaxed">
@@ -259,12 +316,11 @@ while ($row = $enrolledStmt->fetch()) {
 
                     <form action="php/enroll_course.php" method="POST" class="flex gap-3 max-w-md">
                         <input type="text" name="templateCodeInput" id="templateCodeInput" placeholder="Enter Class Code (e.g. CS301-SEC1)" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-xs font-bold uppercase outline-none focus:border-maroon-800">
-                        <button type="submit" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition shrink-0 cursor-pointer">
+                        <button type="submit" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition shrink-0">
                             Enroll & Sync
                         </button>
                     </form>
                 </div>
-                            
 
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <div class="lg:col-span-7 bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-5">
@@ -296,32 +352,32 @@ while ($row = $enrolledStmt->fetch()) {
                                         <input type="text" name="component_name[]" value="Quizzes & Seatwork" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
                                         <input type="number" name="weight[]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
 
                                     <div class="flex items-center space-x-2 component-row">
                                         <input type="text" name="component_name[]" value="Midterm Examination" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
                                         <input type="number" name="weight[]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
 
                                     <div class="flex items-center space-x-2 component-row">
                                         <input type="text" name="component_name[]" value="Final Project & Exam" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
                                         <input type="number" name="weight[]" value="40" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
                                 </div>
 
-                                <button type="button" onclick="addComponentRow()" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 cursor-pointer">
+                                <button type="button" onclick="addComponentRow()" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 pt-1">
                                     <i class="fa-solid fa-circle-plus"></i>
                                     <span>Add Assessment Component</span>
                                 </button>
                             </div>
 
                             <div class="pt-4 border-t border-stone-200">
-                                <button type="submit" name="btnPublishTemplate" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center cursor-pointer">
+                                <button type="submit" name="btnPublishTemplate" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center">
                                     Publish Template & Generate Class Code
                                 </button>
                             </div>
@@ -331,96 +387,64 @@ while ($row = $enrolledStmt->fetch()) {
                     <div class="lg:col-span-5 space-y-4">
                         <h3 class="font-bold text-slate-800 text-base">Enrolled Professor Templates</h3>
                         <div class="space-y-3" id="publishedTemplatesList">
-                            <?php if (empty($dbEnrolled)): ?>
-                                <p class="text-xs text-stone-400 italic">No enrolled templates found.</p>
-                            <?php else: ?>
-                                <?php foreach ($dbEnrolled as $template): ?>
-                                    <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-3">
-                                        <div class="flex items-start justify-between">
-                                            <div>
-                                                <span class="text-[10px] font-bold text-maroon-800 bg-maroon-50 px-2 py-0.5 rounded-full border border-maroon-200">ACTIVE SYNC</span>
-                                                <h4 class="font-extrabold text-slate-900 text-base mt-1"><?php echo htmlspecialchars($template['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></h4>
-                                                <p class="text-xs text-stone-500 font-medium"><?php echo htmlspecialchars($template['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?></p>
-                                                <p class="text-xs text-stone-500 font-medium"><?php echo number_format($template['units'], 1); ?> units</p>
-                                            </div>
-                                            <div class="text-right">
-                                                <span class="text-[10px] uppercase font-bold text-stone-400 block">Class Code</span>
-                                                <span class="font-mono font-black text-maroon-900 text-sm bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200 inline-block mt-0.5"><?php echo htmlspecialchars($template['classCode'] ?? '', ENT_QUOTES, 'UTF-8'); ?></span>
-                                            </div>
-                                        </div>
-                                        <div class="bg-stone-50 p-3 rounded-2xl border border-stone-200 text-xs space-y-1.5">
-                                            <?php foreach ($template['components'] as $component): ?>
-                                                <div class="flex justify-between text-stone-600">
-                                                    <span><?php echo htmlspecialchars($component['name'], ENT_QUOTES, 'UTF-8'); ?>:</span>
-                                                    <span class="font-bold text-slate-800"><?php echo (int)$component['weight']; ?>%</span>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
                         </div>
                     </div>
+                </div>
             </div>
 
-            <!-- Grade Predictor Tab -->
-            <div id="tab-content-predictor" class="hidden space-y-6">
-                <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-5">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-100 pb-4">
+            <div id="tab-content-schedule" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <h3 class="font-bold text-slate-800 text-lg">Grade Predictor & Scenario Simulator</h3>
-                            <p class="text-xs text-stone-500">Select an enrolled course template to load its official instructor components and simulate target scores.</p>
+                            <h3 class="font-bold text-slate-800 text-lg">Detailed Weekly Timetable (Mon - Sat)</h3>
+                            <p class="text-xs text-stone-500">Manage subject schedule slots and add or remove classes dynamically.</p>
                         </div>
-                        <div class="w-full sm:w-72">
-                            <label class="block text-[10px] font-bold uppercase text-stone-500 mb-1">Select Enrolled Course</label>
-                            <select id="predictorCourseSelect" onchange="loadPredictorTemplate()" class="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold text-slate-800 bg-white outline-none focus:border-maroon-800 cursor-pointer">
-                                <option value="">-- Choose Course Template --</option>
-                            </select>
-                        </div>
+                        <button onclick="addScheduleSlotPrompt()" class="px-4 py-2 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition flex items-center space-x-2">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add Schedule Slot</span>
+                        </button>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
-                        <div class="lg:col-span-7 space-y-4">
-                            <div class="flex items-center justify-between">
-                                <h4 class="font-bold text-slate-800 text-sm">Instructor Grading Components</h4>
-                                <span class="text-xs font-bold text-maroon-800 bg-maroon-50 px-2.5 py-1 rounded-full border border-maroon-100" id="predictorTotalWeightBadge">Total Weight: 100%</span>
-                            </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-center border-collapse text-xs border border-stone-200">
+                            <thead>
+                                <tr class="bg-stone-100 text-stone-600 font-bold border-b border-stone-200">
+                                    <th class="p-3 border-r border-stone-200 w-24">Time Slot</th>
+                                    <th class="p-3 border-r border-stone-200">Mon</th>
+                                    <th class="p-3 border-r border-stone-200">Tue</th>
+                                    <th class="p-3 border-r border-stone-200">Wed</th>
+                                    <th class="p-3 border-r border-stone-200">Thu</th>
+                                    <th class="p-3 border-r border-stone-200">Fri</th>
+                                    <th class="p-3 border-r border-stone-200">Sat</th>
+                                    <th class="p-3 w-16">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-stone-200 text-slate-700" id="fullScheduleTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
 
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left border-collapse text-xs">
-                                    <thead>
-                                        <tr class="bg-stone-100 text-stone-600 font-bold border-b border-stone-200">
-                                            <th class="p-3">Component Name</th>
-                                            <th class="p-3 text-center">Instructor Weight</th>
-                                            <th class="p-3 text-center">Target Score (%)</th>
-                                            <th class="p-3 text-right">Weighted Contribution</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-stone-200 text-slate-700" id="predictorComponentsTableBody">
-                                        <tr>
-                                            <td colspan="4" class="p-4 text-center text-stone-400 italic">Please select an enrolled course template above to load components.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+            <div id="tab-content-settings" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
+                    <h3 class="font-bold text-slate-800 text-lg">President's Lister & GWA Target Settings</h3>
+                    <div class="max-w-md space-y-3">
+                        <label class="block text-xs font-bold uppercase text-stone-600">Target GWA Threshold (PUP System)</label>
+                        <select id="thresholdSettingInput" class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-slate-800 bg-white shadow-sm focus:border-maroon-800 outline-none">
+                            <option value="1.45">1.45 - President's Lister Goal</option>
+                            <option value="1.75">1.75 - Dean's Lister Goal</option>
+                            <option value="3.00">3.00 - Minimum Passing Grade Goal</option>
+                        </select>
 
-                        <div class="lg:col-span-5 bg-stone-50 p-6 rounded-2xl border border-stone-200 flex flex-col justify-between space-y-6">
-                            <div class="space-y-4">
-                                <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
-                                    <i class="fa-solid fa-calculator text-maroon-800"></i>
-                                    <span>Simulated Final Standing</span>
-                                </h4>
-                                <div class="p-4 bg-white rounded-xl border border-stone-200 shadow-sm text-center space-y-1">
-                                    <span class="text-[10px] uppercase font-bold text-stone-400 block">Projected Numerical Grade</span>
-                                    <span class="text-3xl font-black text-maroon-900" id="projectedGradeDisplay">1.00</span>
-                                    <span class="block text-[11px] font-semibold text-emerald-700 pt-1" id="projectedStatusText">Status: Excellent Standing</span>
-                                </div>
-                            </div>
-
-                            <button type="button" onclick="alert('Simulation refreshed successfully!')" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center cursor-pointer">
-                                Simulate Scenario
+                        <div class="flex items-center space-x-3 pt-2">
+                            <button id="saveSettingsBtn" type="button" onclick="saveSettings()" class="px-5 py-2.5 bg-maroon-900 text-white text-xs font-bold rounded-xl shadow-sm hover:bg-maroon-800 transition flex items-center space-x-2">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                <span>Save Target Grade</span>
                             </button>
+                            <span id="saveStatusMsg" class="text-xs font-bold text-emerald-700 hidden">
+                                <i class="fa-solid fa-circle-check mr-1"></i> Saved!
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -429,18 +453,11 @@ while ($row = $enrolledStmt->fetch()) {
         </main>
     </div>
 
-
-    <!-- External Linked JavaScript File -->
     <script>
-<<<<<<< Updated upstream
-        window.studentDashboardData = {
-            serverRenderedTemplates: true,
-            enrolledCourses: <?php echo json_encode($dbEnrolled, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE); ?>
-        };
-=======
         google.charts.load('current', { 'packages': ['corechart'] });
         google.charts.setOnLoadCallback(() => renderStudentTrendChart());
 
+        // Load saved target GWA goal or default to 1.45
         let targetGwaGoal = parseFloat(localStorage.getItem('targetGwaGoal')) || 1.45;
 
         let studentGradesData = [
@@ -454,6 +471,11 @@ while ($row = $enrolledStmt->fetch()) {
             { id: 1, title: 'CS-301 Midterm', target: 'Target Weight: 30%', date: 'Sep 28', active: true },
             { id: 2, title: 'BIO-105 Quiz', target: 'Target Weight: 15%', date: 'Oct 3', active: false },
             { id: 3, title: 'MATH-201 Quiz', target: 'Target Weight: 15%', date: 'Oct 10', active: false }
+        ];
+
+        let scheduleMatrix = [
+            { id: 1, time: '10:00 AM', mon: 'CS-301', tue: '', wed: 'CS-301', thu: '', fri: '', sat: 'IT-ELECT' },
+            { id: 2, time: '11:00 AM', mon: '', tue: 'BIO-105', wed: '', thu: 'BIO-105', fri: '', sat: 'IT-ELECT' }
         ];
 
         let enrolledTemplates = <?php echo json_encode($dbEnrolled); ?>;
@@ -474,31 +496,33 @@ while ($row = $enrolledStmt->fetch()) {
                 switchTab('templates');
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
+            const selectElement = document.getElementById('thresholdSettingInput');
+            if (selectElement) {
+                selectElement.value = targetGwaGoal.toFixed(2);
+            }
 
             renderGradesTable();
             renderExamsList();
+            renderScheduleTimetable();
             renderTemplatesList();
-            populatePredictorDropdown();
             recalculateGradesAndStats(false);
         });
 
         function switchTab(tabId) {
-            ['dashboard', 'grades', 'templates', 'predictor'].forEach(id => {
+            ['dashboard', 'grades', 'templates', 'schedule', 'settings'].forEach(id => {
                 const el = document.getElementById(`tab-content-${id}`);
                 if (el) el.classList.add('hidden');
 
                 const btn = document.getElementById(`nav-${id}`);
                 if (btn) {
-                    btn.className = "w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer";
+                    btn.className = "w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3";
                 }
             });
 
-            const targetTab = document.getElementById(`tab-content-${tabId}`);
-            if (targetTab) targetTab.classList.remove('hidden');
-
+            document.getElementById(`tab-content-${tabId}`).classList.remove('hidden');
             const activeBtn = document.getElementById(`nav-${tabId}`);
             if (activeBtn) {
-                activeBtn.className = "w-full text-left px-4 py-3 rounded-xl font-bold text-xs flex items-center space-x-3 bg-maroon-100 text-maroon-900 border border-maroon-200 cursor-pointer";
+                activeBtn.className = "w-full text-left px-4 py-3 rounded-xl font-bold text-xs flex items-center space-x-3 bg-maroon-100 text-maroon-900 border border-maroon-200";
             }
 
             if (tabId === 'dashboard') {
@@ -544,6 +568,7 @@ while ($row = $enrolledStmt->fetch()) {
                 span.innerText = targetGwaGoal.toFixed(2);
             });
 
+            // Exam Predictor Calculation
             const currentNum = parseFloat(calculatedGWA);
             const activeExamWeight = 0.30;
             const currentPercentage = 100 - ((currentNum - 1.0) * 20);
@@ -580,6 +605,26 @@ while ($row = $enrolledStmt->fetch()) {
             }
         }
 
+        function saveSettings() {
+            const selectElement = document.getElementById('thresholdSettingInput');
+            if (!selectElement) return;
+
+            const selectedVal = parseFloat(selectElement.value) || 1.45;
+
+            targetGwaGoal = selectedVal;
+            localStorage.setItem('targetGwaGoal', selectedVal.toString());
+
+            recalculateGradesAndStats(false);
+
+            const statusMsg = document.getElementById('saveStatusMsg');
+            if (statusMsg) {
+                statusMsg.classList.remove('hidden');
+                setTimeout(() => {
+                    statusMsg.classList.add('hidden');
+                }, 3000);
+            }
+        }
+
         function renderGradesTable() {
             const tbody = document.getElementById('gradeInputTableBody');
             tbody.innerHTML = '';
@@ -602,7 +647,7 @@ while ($row = $enrolledStmt->fetch()) {
                     </span>
                 </td>
                 <td class="p-3 text-center">
-                    <button type="button" onclick="removeSubjectRow(${item.id})" class="text-rose-500 hover:text-rose-700 transition cursor-pointer">
+                    <button onclick="removeSubjectRow(${item.id})" class="text-rose-500 hover:text-rose-700 transition">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </td>
@@ -625,11 +670,58 @@ while ($row = $enrolledStmt->fetch()) {
                 </div>
                 <div class="flex items-center space-x-2">
                     <span class="text-xs font-bold ${exam.active ? 'text-maroon-800' : 'text-stone-700'} bg-white px-2.5 py-1 rounded-lg border border-stone-200">${exam.date}</span>
-                    <button type="button" onclick="removeExam(${exam.id})" class="text-stone-400 hover:text-rose-600 text-xs px-1 cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+                    <button onclick="removeExam(${exam.id})" class="text-stone-400 hover:text-rose-600 text-xs px-1"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             `;
                 container.appendChild(div);
             });
+        }
+
+        function renderScheduleTimetable() {
+            const dashTable = document.getElementById('dashboardScheduleMatrix');
+            const fullTable = document.getElementById('fullScheduleTableBody');
+
+            dashTable.innerHTML = '';
+            fullTable.innerHTML = '';
+
+            scheduleMatrix.forEach(row => {
+                const dashTr = document.createElement('tr');
+                dashTr.innerHTML = `
+                <td class="p-2 border-r border-stone-200 bg-stone-50 font-semibold text-[11px]">${row.time}</td>
+                <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.mon)}">${row.mon}</td>
+                <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.tue)}">${row.tue}</td>
+                <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.wed)}">${row.wed}</td>
+                <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.thu)}">${row.thu}</td>
+                <td class="p-2 border-r border-stone-200 ${getSubjectBadgeStyle(row.fri)}">${row.fri}</td>
+                <td class="p-2 ${getSubjectBadgeStyle(row.sat)}">${row.sat}</td>
+            `;
+                dashTable.appendChild(dashTr);
+
+                const fullTr = document.createElement('tr');
+                fullTr.innerHTML = `
+                <td class="p-3 border-r border-stone-200 bg-stone-50 font-bold text-[11px]">${row.time}</td>
+                <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.mon)}">${row.mon}</td>
+                <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.tue)}">${row.tue}</td>
+                <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.wed)}">${row.wed}</td>
+                <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.thu)}">${row.thu}</td>
+                <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.fri)}">${row.fri}</td>
+                <td class="p-3 border-r border-stone-200 ${getSubjectBadgeStyle(row.sat)}">${row.sat}</td>
+                <td class="p-3 text-center">
+                    <button onclick="removeScheduleSlot(${row.id})" class="text-rose-500 hover:text-rose-700 transition">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </td>
+            `;
+                fullTable.appendChild(fullTr);
+            });
+        }
+
+        function getSubjectBadgeStyle(subjectCode) {
+            if (!subjectCode) return '';
+            if (subjectCode.includes('CS')) return 'bg-maroon-50 text-maroon-900 font-bold text-[10px]';
+            if (subjectCode.includes('BIO')) return 'bg-amber-50 text-amber-900 font-bold text-[10px]';
+            if (subjectCode.includes('IT')) return 'bg-purple-50 text-purple-900 font-bold text-[10px]';
+            return 'bg-blue-50 text-blue-900 font-bold text-[10px]';
         }
 
         function renderTemplatesList() {
@@ -664,7 +756,7 @@ while ($row = $enrolledStmt->fetch()) {
                             <span class="text-[10px] uppercase font-bold text-stone-400 block">Class Code</span>
                             <span class="font-mono font-black text-maroon-900 text-sm bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200 inline-block mt-0.5">${tpl.classCode}</span>
                         </div>
-                        <button type="button" onclick="removeTemplate(${tpl.id})" class="text-stone-400 hover:text-rose-600 transition text-sm cursor-pointer">
+                        <button onclick="removeTemplate(${tpl.id})" class="text-stone-400 hover:text-rose-600 transition text-sm">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
@@ -676,100 +768,6 @@ while ($row = $enrolledStmt->fetch()) {
             `;
                 container.appendChild(card);
             });
-        }
-
-        function populatePredictorDropdown() {
-            const select = document.getElementById('predictorCourseSelect');
-            if (!select) return;
-            select.innerHTML = '<option value="">-- Choose Course Template --</option>';
-            enrolledTemplates.forEach(tpl => {
-                const opt = document.createElement('option');
-                opt.value = tpl.id;
-                opt.textContent = `${tpl.code} - ${tpl.title}`;
-                select.appendChild(opt);
-            });
-        }
-
-        function loadPredictorTemplate() {
-            const selectId = document.getElementById('predictorCourseSelect').value;
-            const tbody = document.getElementById('predictorComponentsTableBody');
-            tbody.innerHTML = '';
-
-            if (!selectId) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-stone-400 italic">Please select an enrolled course template above to load components.</td></tr>`;
-                document.getElementById('projectedGradeDisplay').innerText = '1.00';
-                return;
-            }
-
-            const tpl = enrolledTemplates.find(t => t.id == selectId);
-            if (!tpl || !tpl.components || tpl.components.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-stone-400 italic">No grading components found for this template.</td></tr>`;
-                return;
-            }
-
-            let totalWeight = 0;
-            tpl.components.forEach((comp, idx) => {
-                totalWeight += parseInt(comp.weight || 0);
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="p-3 font-bold text-slate-800">${comp.name}</td>
-                    <td class="p-3 text-center font-semibold">${comp.weight}%</td>
-                    <td class="p-3 text-center">
-                        <input type="number" min="0" max="100" value="90" oninput="calculatePrediction()" class="predictor-score w-20 px-2 py-1 rounded-lg border border-stone-300 text-center font-bold text-xs outline-none focus:border-maroon-800" data-weight="${comp.weight}">
-                    </td>
-                    <td class="p-3 text-right font-bold text-maroon-900 predictor-contrib">0.0%</td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            document.getElementById('predictorTotalWeightBadge').innerText = `Total Weight: ${totalWeight}%`;
-            calculatePrediction();
-        }
-
-        function calculatePrediction() {
-            const rows = document.querySelectorAll('#predictorComponentsTableBody tr');
-            let totalWeightedScore = 0;
-
-            rows.forEach(tr => {
-                const scoreInput = tr.querySelector('.predictor-score');
-                const contribTd = tr.querySelector('.predictor-contrib');
-                if (scoreInput && contribTd) {
-                    const weight = parseFloat(scoreInput.getAttribute('data-weight')) || 0;
-                    const score = parseFloat(scoreInput.value) || 0;
-                    const contrib = (score * (weight / 100));
-                    contribTd.innerText = `${contrib.toFixed(1)}%`;
-                    totalWeightedScore += contrib;
-                }
-            });
-
-            let projectedGrade = 5.00;
-            if (totalWeightedScore >= 96) projectedGrade = 1.00;
-            else if (totalWeightedScore >= 91) projectedGrade = 1.25;
-            else if (totalWeightedScore >= 86) projectedGrade = 1.50;
-            else if (totalWeightedScore >= 81) projectedGrade = 1.75;
-            else if (totalWeightedScore >= 76) projectedGrade = 2.00;
-            else if (totalWeightedScore >= 71) projectedGrade = 2.25;
-            else if (totalWeightedScore >= 66) projectedGrade = 2.50;
-            else if (totalWeightedScore >= 61) projectedGrade = 2.75;
-            else if (totalWeightedScore >= 60) projectedGrade = 3.00;
-            else projectedGrade = 5.00;
-
-            document.getElementById('projectedGradeDisplay').innerText = projectedGrade.toFixed(2);
-            
-            const statusText = document.getElementById('projectedStatusText');
-            if (projectedGrade <= 1.45) {
-                statusText.innerText = "Status: President's Lister Standing";
-                statusText.className = "block text-[11px] font-semibold text-emerald-700 pt-1";
-            } else if (projectedGrade <= 1.75) {
-                statusText.innerText = "Status: Dean's Lister Standing";
-                statusText.className = "block text-[11px] font-semibold text-amber-700 pt-1";
-            } else if (projectedGrade <= 3.00) {
-                statusText.innerText = "Status: Passing Grade";
-                statusText.className = "block text-[11px] font-semibold text-blue-700 pt-1";
-            } else {
-                statusText.innerText = "Status: Failing Standing";
-                statusText.className = "block text-[11px] font-semibold text-rose-700 pt-1";
-            }
         }
 
         function renderStudentTrendChart() {
@@ -830,6 +828,28 @@ while ($row = $enrolledStmt->fetch()) {
             renderExamsList();
         }
 
+        function addScheduleSlotPrompt() {
+            const time = prompt("Enter Time Slot (e.g. 01:00 PM):", "01:00 PM");
+            if (!time) return;
+
+            const mon = prompt("Monday Course Code:", "") || "";
+            const tue = prompt("Tuesday Course Code:", "") || "";
+            const wed = prompt("Wednesday Course Code:", "") || "";
+            const thu = prompt("Thursday Course Code:", "") || "";
+            const fri = prompt("Friday Course Code:", "") || "";
+            const sat = prompt("Saturday Course Code:", "") || "";
+
+            scheduleMatrix.push({ id: Date.now(), time, mon, tue, wed, thu, fri, sat });
+            renderScheduleTimetable();
+        }
+
+        function removeScheduleSlot(id) {
+            if (confirm("Remove this time slot from your schedule?")) {
+                scheduleMatrix = scheduleMatrix.filter(s => s.id !== id);
+                renderScheduleTimetable();
+            }
+        }
+
         function addComponentRow() {
             const container = document.getElementById('componentContainer');
             const row = document.createElement('div');
@@ -838,7 +858,7 @@ while ($row = $enrolledStmt->fetch()) {
             <input type="text" name="component_name[]" placeholder="Assessment Name" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
             <input type="number" name="weight[]" value="10" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
             <span class="font-bold text-stone-400">%</span>
-            <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
+            <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
         `;
             container.appendChild(row);
             calculateTotalWeight();
@@ -888,6 +908,26 @@ while ($row = $enrolledStmt->fetch()) {
             return true;
         }
 
+        function enrollTemplateCode() {
+            const code = document.getElementById('templateCodeInput').value.trim();
+            if (!code) return alert('Please enter a Class Code.');
+
+            enrolledTemplates.push({
+                id: Date.now(),
+                code: code.split('-')[0] || 'SYNC-101',
+                title: 'Enrolled Instructor Course',
+                classCode: code.toUpperCase(),
+                components: [
+                    { name: 'Quizzes & Assignments', weight: 40 },
+                    { name: 'Midterm & Final Examination', weight: 60 }
+                ]
+            });
+
+            document.getElementById('templateCodeInput').value = '';
+            renderTemplatesList();
+            alert(`Enrolled in Class Code ${code}! Course grading structure inherited.`);
+        }
+
         function removeTemplate(id) {
             if (confirm("Remove this course template?")) {
                 window.location.href = `php/delete_template.php?id=${id}`;
@@ -895,8 +935,6 @@ while ($row = $enrolledStmt->fetch()) {
         }
 
         function logout() { window.location.href = 'php/logout.php'; }
-
     </script>
-    <script src="./js/student-dashboard.js?v=<?php echo filemtime(__DIR__ . '/js/student-dashboard.js'); ?>"></script>
 </body>
 </html>
