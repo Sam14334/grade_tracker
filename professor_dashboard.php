@@ -339,7 +339,7 @@ while ($row = $templatesStmt->fetch()) {
                             <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200" id="weightTotalBadge">Total Weight: 100%</span>
                         </div>
 
-                        <form id="publishTemplateForm" action="php/publish_template.php" method="POST" onsubmit="return validatePublishForm(event)" class="space-y-4 text-xs">
+                        <form id="publishTemplateForm" action="php/publish_template.php" method="POST" class="space-y-4 text-xs">
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
                                     <label class="block font-bold uppercase text-stone-600 mb-1">Course Code</label>
@@ -355,45 +355,34 @@ while ($row = $templatesStmt->fetch()) {
                                 <label class="block font-bold uppercase text-stone-600">Grading System Components & Percentage Weights</label>
 
                                 <div class="space-y-2" id="componentContainer">
-                                    <div class="flex flex-wrap items-center gap-2 component-row">
-                                        <input type="text" name="component_name[0]" value="Quizzes & Seatwork" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
-                                            <input type="checkbox" name="is_exam[0]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
-                                        </label>
-                                        <input type="number" name="weight[0]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                    <div class="flex items-center space-x-2 component-row">
+                                        <input type="text" name="component_name[0]" value="Quizzes & Seatwork" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <input type="number" name="weight[0]" value="30" min="1" max="100" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
-
-                                    <div class="flex flex-wrap items-center gap-2 component-row">
-                                        <input type="text" name="component_name[1]" value="Midterm Examination" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
-                                            <input type="checkbox" name="is_exam[1]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
-                                        </label>
-                                        <input type="number" name="weight[1]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                    <div class="flex items-center space-x-2 component-row">
+                                        <input type="text" name="component_name[1]" value="Midterm Examination" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <input type="number" name="weight[1]" value="30" min="1" max="100" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
-
-                                    <div class="flex flex-wrap items-center gap-2 component-row">
-                                        <input type="text" name="component_name[2]" value="Final Project & Exam" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
-                                            <input type="checkbox" name="is_exam[2]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
-                                        </label>
-                                        <input type="number" name="weight[2]" value="40" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                    <div class="flex items-center space-x-2 component-row">
+                                        <input type="text" name="component_name[2]" value="Final Project & Exam" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <input type="number" name="weight[2]" value="40" min="1" max="100" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
                                 </div>
 
-                                <button type="button" onclick="addComponentRow()" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 pt-1">
+                                <button type="button" id="addRowBtn" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 pt-1 cursor-pointer">
                                     <i class="fa-solid fa-circle-plus"></i>
                                     <span>Add Assessment Criterion</span>
                                 </button>
                             </div>
 
                             <div class="pt-4 border-t border-stone-200">
-                                <button type="submit" name="btnPublishTemplate" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center cursor-pointer">
+                                <button type="button" id="publishBtn" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center cursor-pointer">
                                     Publish Syllabus & Generate Class Code
                                 </button>
                             </div>
@@ -412,11 +401,12 @@ while ($row = $templatesStmt->fetch()) {
         </main>
     </div>
 
-    <!-- Pass PHP templates array safely into global JS variable -->
+    <!-- Pass database templates into JavaScript -->
     <script>
-        const enrolledTemplates = <?php echo json_encode($publishedTemplates); ?>;
+        let enrolledTemplates = <?php echo json_encode($publishedTemplates); ?>;
     </script>
-    <!-- External JavaScript File -->
+    <!-- Include your custom JS file -->
     <script src="js/professor-dashboard.js"></script>
+    <script src="js/professor-templates.js"></script>
 </body>
 </html>
