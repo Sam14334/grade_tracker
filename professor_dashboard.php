@@ -1,11 +1,12 @@
 <?php
 session_start();
 if (!isset($_SESSION['user_id'])) {
-    header("Location: index.html");
+    header("Location: index.php");
     exit();
 }
 // Enforce professor role access
-if (isset($_SESSION['role']) && strcasecmp($_SESSION['role'], 'Student') === 0) {
+if (!((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
+    (isset($_SESSION['role']) && strcasecmp($_SESSION['role'], 'Professor') === 0))) {
     header("Location: student_dashboard.php");
     exit();
 }

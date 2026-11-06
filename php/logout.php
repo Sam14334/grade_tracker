@@ -3,6 +3,6 @@ session_start(); // Must start session before destroying it!
 $_SESSION = [];  // Clear all session variables
 session_destroy(); // Destroy the session
 
-header("Location: ../index.html");
+header("Location: ../index.php");
 exit();
 ?>

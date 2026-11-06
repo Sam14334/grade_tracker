@@ -1,14 +1,13 @@
 <?php
 // publish_template.php
 session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../index.php");
+    exit();
+}
 include 'db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || isset($_POST['btnPublishTemplate']))) {
-    if (!isset($_SESSION['user_id'])) {
-        header("Location: ../index.html");
-        exit();
-    }
-
     $userId = (int)$_SESSION['user_id'];
     $courseCode = trim($_POST['courseCode'] ?? '');
     $courseTitle = trim($_POST['courseTitle'] ?? '');
@@ -43,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || is
         $stmtEnroll->execute([$userId, $templateId]);
 
         // Redirect back to dashboard with success
-        if (isset($_SESSION['role']) && (strcasecmp($_SESSION['role'], 'Professor') === 0 || strcasecmp($_SESSION['role'], 'Teacher') === 0)) {
+        if (isset($_SESSION['role']) && strcasecmp($_SESSION['role'], 'Professor') === 0) {
             header("Location: ../professor_dashboard.php?template=success&code=" . urlencode($classCode));
         } else {
             header("Location: ../student_dashboard.php?template=success&code=" . urlencode($classCode));

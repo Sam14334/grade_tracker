@@ -1,7 +1,12 @@
 <?php
 session_start();
 if (!isset($_SESSION['user_id'])) {
-    header("Location: index.html");
+    header("Location: index.php");
+    exit();
+}
+if ((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
+    (isset($_SESSION['role']) && strcasecmp($_SESSION['role'], 'Professor') === 0)) {
+    header("Location: professor_dashboard.php");
     exit();
 }
 include 'php/db.php';

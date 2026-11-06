@@ -1,6 +1,10 @@
 <?php
 // register.php
 session_start();
+if (isset($_SESSION['user_id']) || !isset($_POST['btnRegister'])) {
+    header("Location: ../index.php");
+    exit();
+}
 include 'db.php';
 
 if (isset($_POST['btnRegister'])) {
@@ -12,13 +16,13 @@ if (isset($_POST['btnRegister'])) {
 
     // Basic required fields check
     if (empty($fullName) || empty($email) || empty($password) || empty($confirmPassword)) {
-        header("Location: ../index.html?error=" . urlencode("All fields are required."));
+        header("Location: ../index.php?error=" . urlencode("All fields are required."));
         exit();
     }
 
     // Password match check
     if ($password !== $confirmPassword) {
-        header("Location: ../index.html?error=" . urlencode("Passwords do not match."));
+        header("Location: ../index.php?error=" . urlencode("Passwords do not match."));
         exit();
     }
 
@@ -27,12 +31,12 @@ if (isset($_POST['btnRegister'])) {
     $domain = end($emailParts);
 
     if ($role === 'professor' && $domain !== 'pup.edu.ph') {
-        header("Location: ../index.html?error=" . urlencode("Professor registration requires an official @pup.edu.ph email address."));
+        header("Location: ../index.php?error=" . urlencode("Professor registration requires an official @pup.edu.ph email address."));
         exit();
     }
 
     if ($role === 'student' && $domain !== 'iskolarngbayan.pup.edu.ph') {
-        header("Location: ../index.html?error=" . urlencode("Student registration requires an official @iskolarngbayan.pup.edu.ph email address."));
+        header("Location: ../index.php?error=" . urlencode("Student registration requires an official @iskolarngbayan.pup.edu.ph email address."));
         exit();
     }
 
@@ -41,7 +45,7 @@ if (isset($_POST['btnRegister'])) {
     $checkStmt->execute([$email]);
 
     if ($checkStmt->fetch()) {
-        header("Location: ../index.html?error=" . urlencode("Email address is already registered. Please log in."));
+        header("Location: ../index.php?error=" . urlencode("Email address is already registered. Please log in."));
         exit();
     }
 
@@ -58,7 +62,7 @@ if (isset($_POST['btnRegister'])) {
         $cooldown = 60;
         if ($secondsSince < $cooldown) {
             $_SESSION['pending_otp_email'] = $email;
-            header("Location: ../otp.html?email=" . urlencode($email));
+            header("Location: ../otp.php?email=" . urlencode($email));
             exit();
         }
     }
@@ -108,10 +112,10 @@ if (isset($_POST['btnRegister'])) {
     }
 
     $_SESSION['pending_otp_email'] = $email;
-    header("Location: ../otp.html?email=" . urlencode($email));
+    header("Location: ../otp.php?email=" . urlencode($email));
     exit();
 } else {
-    header("Location: ../index.html");
+    header("Location: ../index.php");
     exit();
 }
 ?>

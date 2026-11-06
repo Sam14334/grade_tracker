@@ -3,7 +3,12 @@
 session_start();
 header('Content-Type: application/json');
 
-$email = strtolower(trim($_POST['email'] ?? $_SESSION['pending_otp_email'] ?? ''));
+if (!isset($_SESSION['pending_otp_email']) || isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'error' => 'Please register or sign in to start email verification.']);
+    exit();
+}
+
+$email = strtolower(trim($_SESSION['pending_otp_email']));
 
 if (empty($email)) {
     echo json_encode(['success' => false, 'error' => 'Email address is required.']);
