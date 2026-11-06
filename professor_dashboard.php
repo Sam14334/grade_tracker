@@ -90,7 +90,7 @@ while ($row = $templatesStmt->fetch()) {
                     <span class="font-semibold text-xs sm:text-sm hidden lg:inline"><?php echo $userName; ?></span>
                 </div>
 
-                <a href="php/logout.php" class="text-xs font-semibold text-maroon-200 hover:text-white transition flex items-center space-x-1.5">
+                <a href="php/logout.php" class="text-xs font-semibold text-maroon-200 hover:text-white transition flex items-center space-x-1.5 cursor-pointer">
                     <i class="fa-solid fa-right-from-bracket"></i>
                     <span class="hidden sm:inline">Logout</span>
                 </a>
@@ -104,17 +104,17 @@ while ($row = $templatesStmt->fetch()) {
             <div class="space-y-1">
                 <p class="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-stone-400">Main Menu</p>
                 
-                <button onclick="switchTab('overview')" id="nav-overview" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
+                <button type="button" onclick="switchTab('overview')" id="nav-overview" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
                     <i class="fa-solid fa-chart-pie text-sm"></i>
                     <span>Faculty Overview</span>
                 </button>
 
-                <button onclick="switchTab('standing')" id="nav-standing" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
+                <button type="button" onclick="switchTab('standing')" id="nav-standing" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
                     <i class="fa-solid fa-users-rectangle text-sm"></i>
                     <span>Class Standing</span>
                 </button>
 
-                <button onclick="switchTab('templates')" id="nav-templates" class="w-full text-left px-4 py-3 rounded-xl font-bold text-xs flex items-center space-x-3 bg-maroon-100 text-maroon-900 border border-maroon-200 cursor-pointer">
+                <button type="button" onclick="switchTab('templates')" id="nav-templates" class="w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3 cursor-pointer">
                     <i class="fa-solid fa-sliders text-sm"></i>
                     <span>Course Templates</span>
                 </button>
@@ -272,7 +272,7 @@ while ($row = $templatesStmt->fetch()) {
             </div>
 
             <!-- Course Templates Tab Content -->
-            <div id="tab-content-templates" class="space-y-6">
+            <div id="tab-content-templates" class="hidden space-y-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-stone-300/60">
                     <div>
                         <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Professor Syllabus Templates</h2>
