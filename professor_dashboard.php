@@ -12,6 +12,8 @@ if (!((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
 }
 include 'php/db.php';
 require_once 'php/grade_calculator.php';
+require_once 'php/course_components.php';
+if (!isset($_SESSION['score_csrf_token'])) $_SESSION['score_csrf_token'] = bin2hex(random_bytes(32));
 $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email'], ENT_QUOTES, 'UTF-8');
 $userInitial = strtoupper(substr($userName, 0, 1));
@@ -26,131 +28,56 @@ $templatesStmt->execute([$userId]);
 $publishedTemplates = [];
 $standingCourses = [];
 
-$compStmt = $conn->prepare("SELECT id, component_name, weight, is_exam FROM template_components WHERE template_id = ? ORDER BY id");
-
 while ($row = $templatesStmt->fetch()) {
-    $tId = (int)$row['template_id'];
-    $compStmt->execute([$tId]);
-    $comps = [];
-    while ($c = $compStmt->fetch()) {
-        $comps[] = [
-            'id' => (int)$c['id'],
-            'name' => $c['component_name'],
-            'weight' => (int)$c['weight'],
-            'isExam' => filter_var($c['is_exam'], FILTER_VALIDATE_BOOLEAN)
-        ];
-    }
+    $templateId = (int)$row['template_id'];
+    $components = loadTemplateComponents($conn, $templateId);
     $publishedTemplates[] = [
-        'id' => $tId,
-        'code' => $row['course_code'],
-        'title' => $row['course_title'],
-        'classCode' => $row['class_code'],
-        'components' => $comps
+        'id' => $templateId, 'code' => $row['course_code'], 'title' => $row['course_title'],
+        'classCode' => $row['class_code'], 'components' => $components,
     ];
-    $standingCourses[$tId] = [
-        'id' => $tId,
-        'code' => (string)($row['course_code'] ?? ''),
-        'title' => (string)($row['course_title'] ?? ''),
-        'components' => $comps,
-        'students' => []
+    $standingCourses[$templateId] = [
+        'id' => $templateId, 'code' => (string)$row['course_code'], 'title' => (string)$row['course_title'],
+        'components' => $components, 'students' => [],
     ];
 }
 
-$enrollmentStmt = $conn->prepare("
-    SELECT ec.enrollment_id, ec.template_id, u.full_name, u.email
-    FROM enrolled_courses ec
-    JOIN grade_templates gt ON gt.template_id = ec.template_id
+$enrollmentStmt = $conn->prepare('SELECT ec.enrollment_id, ec.template_id, u.full_name, u.email
+    FROM enrolled_courses ec JOIN grade_templates gt ON gt.template_id = ec.template_id
     JOIN users u ON u.user_id = ec.user_id
     WHERE gt.user_id = ? AND ec.user_id <> ? AND u.role_id <> 2
-    ORDER BY ec.template_id, u.full_name, u.email
-");
+    ORDER BY ec.template_id, u.full_name, u.email');
 $enrollmentStmt->execute([$userId, $userId]);
-$enrollmentsById = [];
-while ($row = $enrollmentStmt->fetch()) {
-    $templateId = (int)$row['template_id'];
-    $enrollmentId = (int)$row['enrollment_id'];
-    if (!isset($standingCourses[$templateId])) {
-        continue;
+while ($enrollment = $enrollmentStmt->fetch()) {
+    $templateId = (int)$enrollment['template_id'];
+    if (!isset($standingCourses[$templateId])) continue;
+    $components = $standingCourses[$templateId]['components'];
+    $scores = loadEnrollmentScores($conn, (int)$enrollment['enrollment_id'], $templateId);
+    $result = calculateCourseGrade($components, $scores);
+    $totals = [];
+    foreach ($scores as $score) {
+        $key = $score['component_id'];
+        if (!isset($totals[$key])) $totals[$key] = ['score' => 0.0, 'max' => 0, 'assessments' => []];
+        $totals[$key]['score'] += (float)$score['raw_score'];
+        $totals[$key]['max'] += (int)$score['total_items'];
+        $totals[$key]['assessments'][] = ['title' => $score['assessment_title'], 'score' => (float)$score['raw_score'], 'max' => (int)$score['total_items']];
     }
-
-    $enrollmentsById[$enrollmentId] = [
-        'templateId' => $templateId,
-        'student' => $row['full_name'] ?: $row['email'],
-        'email' => $row['email'],
-        'components' => []
-    ];
-}
-
-if ($enrollmentsById) {
-    $scoreStmt = $conn->prepare("
-SELECT scs.enrollment_id, scs.component_id, scs.assessment_title, scs.raw_score, scs.total_items
-FROM student_component_scores scs
-JOIN enrolled_courses ec ON ec.enrollment_id = scs.enrollment_id
-JOIN grade_templates gt ON gt.template_id = ec.template_id
-JOIN template_components tc ON tc.id = scs.component_id AND tc.template_id = ec.template_id
-WHERE gt.user_id = ? AND ec.user_id <> ?
-    ");
-    $scoreStmt->execute([$userId, $userId]);
-    while ($score = $scoreStmt->fetch()) {
-$enrollmentId = (int)$score['enrollment_id'];
-$componentId = (int)$score['component_id'];
-if (!isset($enrollmentsById[$enrollmentId]['components'][$componentId])) {
-    $enrollmentsById[$enrollmentId]['components'][$componentId] = [
-        'score' => 0.0,
-        'max' => 0,
-        'assessments' => []
-    ];
-}
-$entry = [
-    'title' => $score['assessment_title'],
-    'score' => (float)$score['raw_score'],
-    'max' => (int)$score['total_items']
-];
-$enrollmentsById[$enrollmentId]['components'][$componentId]['score'] += $entry['score'];
-$enrollmentsById[$enrollmentId]['components'][$componentId]['max'] += $entry['max'];
-$enrollmentsById[$enrollmentId]['components'][$componentId]['assessments'][] = $entry;
-    }
-}
-
-foreach ($enrollmentsById as $enrollmentId => $enrollment) {
-    $course = &$standingCourses[$enrollment['templateId']];
     $componentResults = [];
-    $weightedTotal = 0.0;
     $gradedWeight = 0;
-    $allComponentsGraded = count($course['components']) > 0;
-    foreach ($course['components'] as $component) {
-        $componentScore = $enrollment['components'][$component['id']] ?? ['score' => 0.0, 'max' => 0, 'assessments' => []];
-        $hasScore = $componentScore['max'] > 0;
-        $percentage = $hasScore ? ($componentScore['score'] / $componentScore['max']) * 100 : null;
-        if ($hasScore) {
-            $weightedTotal += $percentage * $component['weight'];
-            $gradedWeight += $component['weight'];
-        } else {
-            $allComponentsGraded = false;
-        }
+    foreach ($components as $component) {
+        $total = $totals[$component['id']] ?? ['score' => 0.0, 'max' => 0, 'assessments' => []];
+        if ($total['max'] > 0) $gradedWeight += $component['weight'] / 2;
         $componentResults[] = [
-            'id' => $component['id'],
-            'name' => $component['name'],
-            'weight' => $component['weight'],
-            'percentage' => $percentage,
-            'score' => $componentScore['score'],
-            'max' => $componentScore['max'],
-            'assessments' => $componentScore['assessments']
+            'id' => $component['id'], 'period' => $component['period'], 'name' => $component['name'],
+            'weight' => $component['weight'], 'percentage' => $total['max'] > 0 ? $total['score'] / $total['max'] * 100 : null,
+            'score' => $total['score'], 'max' => $total['max'], 'assessments' => $total['assessments'],
         ];
     }
-
-    $standing = $gradedWeight > 0 ? $weightedTotal / $gradedWeight : null;
-    $course['students'][] = [
-        'enrollmentId' => $enrollmentId,
-        'student' => $enrollment['student'],
-        'email' => $enrollment['email'],
-        'percentage' => $standing,
-        'grade' => $allComponentsGraded && $standing !== null ? percentageToGrade($standing) : null,
-        'status' => $standing === null ? 'Not Started' : ($allComponentsGraded ? 'Complete' : 'In Progress'),
-        'gradedWeight' => $gradedWeight,
-        'components' => $componentResults
+    $standingCourses[$templateId]['students'][] = [
+        'enrollmentId' => (int)$enrollment['enrollment_id'], 'student' => $enrollment['full_name'] ?: $enrollment['email'],
+        'email' => $enrollment['email'], 'percentage' => $result['percentage'], 'grade' => $result['grade'],
+        'status' => !$scores ? 'Not Started' : $result['status'], 'periods' => $result['periods'],
+        'gradedWeight' => $gradedWeight, 'components' => $componentResults,
     ];
-    unset($course);
 }
 ?>
 <!DOCTYPE html>
@@ -231,8 +158,8 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
         <!-- Main Workspace -->
         <main class="flex-1 p-6 sm:p-8 space-y-6 max-w-7xl">
             <div class="flex gap-2 md:hidden">
-                <button type="button" onclick="switchProfessorTab('standing')" class="flex-1 rounded-xl bg-maroon-900 px-3 py-2 text-xs font-bold text-white">Class Standing</button>
-                <button type="button" onclick="switchProfessorTab('templates')" class="flex-1 rounded-xl bg-stone-200 px-3 py-2 text-xs font-bold text-stone-700">Course Templates</button>
+                <button type="button" id="mobile-standing" onclick="switchProfessorTab('standing')" class="flex-1 rounded-xl bg-maroon-900 px-3 py-2 text-xs font-bold text-white">Class Standing</button>
+                <button type="button" id="mobile-templates" onclick="switchProfessorTab('templates')" class="flex-1 rounded-xl bg-stone-200 px-3 py-2 text-xs font-bold text-stone-700">Course Templates</button>
             </div>
 
             <section id="standingSection" class="space-y-6">
@@ -279,7 +206,7 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <h3 class="font-bold text-slate-800">Course Standing Summary</h3>
-                            <p class="text-xs text-stone-500 mt-1">A student's current standing is normalized across components with recorded scores.</p>
+                            <p class="text-xs text-stone-500 mt-1">Overall standing uses 50% Midterms and 50% Finals. Each period has its own 100% grading weights.</p>
                         </div>
                         <span class="text-[11px] text-stone-400">Incomplete courses are labeled in progress.</span>
                     </div>
@@ -318,6 +245,9 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
             </section>
 
             <section id="templatesSection" class="hidden space-y-6">
+                <?php if (isset($_GET['error']) && is_string($_GET['error'])): ?>
+                    <p role="alert" class="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-sm"><?php echo htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8'); ?></p>
+                <?php endif; ?>
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-stone-300/60">
                     <div>
                         <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Professor Syllabus Templates</h2>
@@ -333,61 +263,50 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
                             <i class="fa-solid fa-sliders text-maroon-800"></i>
                             <span>Create Course Template</span>
                         </h3>
-                        <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200" id="weightTotalBadge">Total Weight: 100%</span>
+                        <span class="text-xs text-stone-500">Each period: 100%</span>
                     </div>
 
                     <form id="publishTemplateForm" action="php/publish_template.php" method="POST" onsubmit="return validatePublishForm(event)" class="space-y-4 text-xs">
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <div>
                                 <label class="block font-bold uppercase text-stone-600 mb-1">Course Code</label>
-                                <input type="text" name="courseCode" id="courseCodeInput" value="CS-301" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                <input type="text" name="courseCode" id="courseCodeInput" value="CS-301" maxlength="20" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
                             </div>
                             <div>
                                 <label class="block font-bold uppercase text-stone-600 mb-1">Course Title</label>
-                                <input type="text" name="courseTitle" id="courseTitleInput" value="Software Engineering" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                <input type="text" name="courseTitle" id="courseTitleInput" value="Software Engineering" maxlength="100" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                            </div>
+                            <div>
+                                <label for="courseUnitInput" class="block font-bold uppercase text-stone-600 mb-1">Unit</label>
+                                <input type="number" name="courseUnit" id="courseUnitInput" value="3.0" min="0.1" max="99.9" step="0.1" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
                             </div>
                         </div>
 
-                        <div class="space-y-3 pt-2">
-                            <label class="block font-bold uppercase text-stone-600">Grading System Components & Percentage Weights</label>
-
-                            <div class="space-y-2" id="componentContainer">
-                                <div class="flex flex-wrap items-center gap-2 component-row">
-                                    <input type="text" name="component_name[0]" value="Quizzes & Seatwork" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                    <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
-                                        <input type="checkbox" name="is_exam[0]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
-                                    </label>
-                                    <input type="number" name="weight[0]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
-                                    <span class="font-bold text-stone-400">%</span>
-                                    <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
-                                </div>
-
-                                <div class="flex flex-wrap items-center gap-2 component-row">
-                                    <input type="text" name="component_name[1]" value="Midterm Examination" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                    <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
-                                        <input type="checkbox" name="is_exam[1]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
-                                    </label>
-                                    <input type="number" name="weight[1]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
-                                    <span class="font-bold text-stone-400">%</span>
-                                    <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
-                                </div>
-
-                                <div class="flex flex-wrap items-center gap-2 component-row">
-                                    <input type="text" name="component_name[2]" value="Final Project & Exam" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                    <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
-                                        <input type="checkbox" name="is_exam[2]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
-                                    </label>
-                                    <input type="number" name="weight[2]" value="40" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
-                                    <span class="font-bold text-stone-400">%</span>
-                                    <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
-                                </div>
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['score_csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <?php foreach (gradingPeriods() as $period => $label): ?>
+                        <section class="period-components space-y-3 p-4 bg-stone-50 rounded-2xl border border-stone-200" data-period="<?php echo $period; ?>">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <h4 class="font-bold text-maroon-900"><?php echo $label; ?></h4>
+                                <span id="weightTotalBadge-<?php echo $period; ?>" class="text-xs font-bold text-emerald-700">Total Weight: 100%</span>
                             </div>
-
-                            <button type="button" onclick="addComponentRow()" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 pt-1">
-                                <i class="fa-solid fa-circle-plus"></i>
-                                <span>Add Assessment Criterion</span>
-                            </button>
-                        </div>
+                            <p class="text-[11px] text-stone-500">Weights must total 100%. You may mark up to one component as an exam.</p>
+                            <div class="space-y-2" id="componentContainer-<?php echo $period; ?>">
+                                <?php foreach ([['Quizzes & Seatwork', 50], ['Activities', 20], [$label === 'Midterms' ? 'Midterm Examination' : 'Final Examination', 30]] as $index => [$name, $weight]): ?>
+                                <div class="flex flex-wrap items-center gap-2 component-row">
+                                    <input type="text" name="components[<?php echo $period; ?>][<?php echo $index; ?>][name]" value="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>" maxlength="100" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                    <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
+                                        <input type="checkbox" name="components[<?php echo $period; ?>][<?php echo $index; ?>][is_exam]" value="1" onchange="limitExam(this)" class="comp-exam w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                                    </label>
+                                    <input type="number" name="components[<?php echo $period; ?>][<?php echo $index; ?>][weight]" value="<?php echo $weight; ?>" min="1" max="100" step="1" oninput="calculateTotalWeight()" required class="comp-weight w-20 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                    <span class="font-bold text-stone-400">%</span>
+                                    <button type="button" onclick="removeRow(this)" aria-label="Remove component" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <button type="button" onclick="addComponentRow('<?php echo $period; ?>')" class="text-xs font-bold text-maroon-800 hover:underline">+ Add <?php echo $label; ?> Component</button>
+                        </section>
+                        <?php endforeach; ?>
+                        <input type="hidden" name="components_complete" value="1">
 
                         <div class="pt-4 border-t border-stone-200">
                             <button type="submit" name="btnPublishTemplate" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center">
@@ -427,7 +346,8 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
     <script>
         let enrolledTemplates = <?php echo json_encode($publishedTemplates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         const standingCourses = <?php echo json_encode(array_values($standingCourses), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-        let nextComponentIndex = document.querySelectorAll('#componentContainer .component-row').length;
+        const nextComponentIndex = {midterms: 3, finals: 3};
+        const periodLabels = {midterms: 'Midterms', finals: 'Finals'};
         let activeStandingFilter = 'all';
 
         function escapeHtml(value) {
@@ -446,12 +366,16 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
             renderTemplatesList();
             calculateTotalWeight();
             initializeClassStanding();
+            if (window.location.hash === '#templates' || urlParams.has('template') || urlParams.has('error')) switchProfessorTab('templates');
         });
 
         function switchProfessorTab(tab) {
             const showStanding = tab === 'standing';
             document.getElementById('standingSection').classList.toggle('hidden', !showStanding);
             document.getElementById('templatesSection').classList.toggle('hidden', showStanding);
+            ['standing', 'templates'].forEach(name => {
+                document.getElementById(`mobile-${name}`).className = `flex-1 rounded-xl px-3 py-2 text-xs font-bold ${name === tab ? 'bg-maroon-900 text-white' : 'bg-stone-200 text-stone-700'}`;
+            });
             document.getElementById('nav-standing').className = showStanding
                 ? 'w-full text-left px-4 py-3 rounded-xl font-bold text-xs flex items-center space-x-3 bg-maroon-100 text-maroon-900 border border-maroon-200'
                 : 'w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3';
@@ -513,7 +437,7 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
         }
 
         function standingStatus(row) {
-            if (row.percentage === null) return {label: 'Not Started', style: 'bg-stone-100 text-stone-600'};
+            if (row.percentage === null) return {label: row.status, style: 'bg-stone-100 text-stone-600'};
             if (row.percentage < 75) return {label: 'At Risk', style: 'bg-rose-100 text-rose-700'};
             if (row.status !== 'Complete') return {label: 'In Progress', style: 'bg-amber-100 text-amber-800'};
             if (row.percentage >= 90) return {label: 'Outstanding', style: 'bg-emerald-100 text-emerald-700'};
@@ -576,7 +500,7 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
             const components = courses.length === 1 ? courses[0].components : [];
             tableHead.innerHTML = `<tr class="bg-stone-50 text-[10px] uppercase tracking-wide text-stone-500 border-b border-stone-200">
                 <th class="p-3">Rank</th><th class="p-3">Student</th>${showCourse ? '<th class="p-3">Course</th>' : ''}
-                <th class="p-3">Current Standing</th>${components.map(component => `<th class="p-3">${escapeHtml(component.name)} (${component.weight}%)</th>`).join('')}
+                <th class="p-3">Current Standing</th>${components.map(component => `<th class="p-3">${periodLabels[component.period]} · ${escapeHtml(component.name)} (${component.weight}%)</th>`).join('')}
                 <th class="p-3">Progress / Status</th><th class="p-3 text-right">Action</th></tr>`;
             const sort = document.getElementById('rankSort').value;
             const scoreRankings = [...allRows].sort((a, b) => {
@@ -638,7 +562,7 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
                     ? component.assessments.map(assessment => `<li class="flex justify-between gap-3 py-1 text-[11px] text-stone-500"><span>${escapeHtml(assessment.title)}</span><span>${Number(assessment.score)} / ${Number(assessment.max)}</span></li>`).join('')
                     : '<li class="py-1 text-[11px] italic text-stone-400">No scores entered</li>';
                 return `<section class="rounded-xl border border-stone-200 p-3">
-                    <div class="flex items-center justify-between gap-3"><h3 class="text-xs font-bold text-slate-800">${escapeHtml(component.name)} <span class="font-medium text-stone-400">(${component.weight}%)</span></h3><span class="text-xs font-black text-slate-800">${formatPercentage(component.percentage)}</span></div>
+                    <div class="flex items-center justify-between gap-3"><h3 class="text-xs font-bold text-slate-800">${periodLabels[component.period]} · ${escapeHtml(component.name)} <span class="font-medium text-stone-400">(${component.weight}%)</span></h3><span class="text-xs font-black text-slate-800">${formatPercentage(component.percentage)}</span></div>
                     <ul class="mt-2 border-t border-stone-100 pt-2">${assessments}</ul>
                 </section>`;
             }).join('') || '<p class="text-xs text-stone-500">This course has no grading components.</p>';
@@ -658,12 +582,10 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
                 const card = document.createElement('div');
                 card.className = "bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-3";
 
-                let componentsHtml = tpl.components.map(c => `
-                    <div class="flex justify-between text-stone-600">
-                        <span>${escapeHtml(c.name)}:</span>
-                        <span class="font-bold text-slate-800">${c.weight}%</span>
-                    </div>
-                `).join('');
+                const componentsHtml = Object.entries(periodLabels).map(([period, label]) => `
+                    <div class="pt-2"><p class="font-bold text-maroon-900 mb-1">${label} · 100%</p>
+                    ${tpl.components.filter(c => c.period === period).map(c => `
+                        <div class="flex justify-between text-stone-600"><span>${escapeHtml(c.name)}${c.is_exam ? ' · Exam' : ''}</span><span class="font-bold">${c.weight}%</span></div>`).join('')}</div>`).join('');
 
                 card.innerHTML = `
                     <div class="flex items-start justify-between">
@@ -691,65 +613,62 @@ foreach ($enrollmentsById as $enrollmentId => $enrollment) {
             });
         }
 
-        function addComponentRow() {
-            const container = document.getElementById('componentContainer');
+        function addComponentRow(period) {
+            const container = document.getElementById(`componentContainer-${period}`);
             const row = document.createElement('div');
-            const index = nextComponentIndex++;
+            const index = nextComponentIndex[period]++;
             row.className = 'flex flex-wrap items-center gap-2 component-row';
             row.innerHTML = `
-                <input type="text" name="component_name[${index}]" placeholder="Assessment Name" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                <input type="text" name="components[${period}][${index}][name]" placeholder="Assessment Name" maxlength="100" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
                 <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
-                    <input type="checkbox" name="is_exam[${index}]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                    <input type="checkbox" name="components[${period}][${index}][is_exam]" value="1" onchange="limitExam(this)" class="comp-exam w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
                 </label>
-                <input type="number" name="weight[${index}]" value="10" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                <input type="number" name="components[${period}][${index}][weight]" value="10" min="1" max="100" step="1" oninput="calculateTotalWeight()" required class="comp-weight w-20 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                 <span class="font-bold text-stone-400">%</span>
-                <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
-            `;
+                <button type="button" onclick="removeRow(this)" aria-label="Remove component" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>`;
             container.appendChild(row);
             calculateTotalWeight();
         }
 
-        function removeRow(btn) {
-            btn.closest('.component-row').remove();
+        function limitExam(input) {
+            if (!input.checked) return;
+            input.closest('.period-components').querySelectorAll('.comp-exam').forEach(other => {
+                if (other !== input) other.checked = false;
+            });
+        }
+
+        function removeRow(button) {
+            button.closest('.component-row').remove();
             calculateTotalWeight();
         }
 
         function calculateTotalWeight() {
-            const weights = document.querySelectorAll('.comp-weight');
-            let total = 0;
-            weights.forEach(w => total += parseFloat(w.value) || 0);
-
-            const badge = document.getElementById('weightTotalBadge');
-            badge.innerText = `Total Weight: ${total}%`;
-            badge.className = total === 100
-                ? "text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200"
-                : "text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200";
-
-            return total;
+            let valid = true;
+            Object.keys(periodLabels).forEach(period => {
+                const inputs = document.querySelectorAll(`#componentContainer-${period} .comp-weight`);
+                const total = [...inputs].reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+                const badge = document.getElementById(`weightTotalBadge-${period}`);
+                badge.textContent = `Total Weight: ${total}%`;
+                badge.className = `text-xs font-bold ${total === 100 ? 'text-emerald-700' : 'text-rose-700'}`;
+                if (total !== 100) valid = false;
+            });
+            return valid;
         }
 
-        function validatePublishForm(e) {
-            const total = calculateTotalWeight();
-            if (total !== 100) {
-                alert(`Total weight must equal 100%. Current total is ${total}%.`);
+        function validatePublishForm(event) {
+            if (!calculateTotalWeight()) {
+                alert('Midterms and Finals must each total 100%.');
                 return false;
             }
-            const code = document.getElementById('courseCodeInput').value.trim();
-            const title = document.getElementById('courseTitleInput').value.trim();
-            if (!code || !title) {
-                alert('Please enter Course Code and Title.');
-                return false;
+            for (const section of document.querySelectorAll('.period-components')) {
+                if (section.querySelectorAll('.comp-exam:checked').length > 1) {
+                    alert('Each period can have at most one checked exam.');
+                    return false;
+                }
             }
-            const submitBtn = document.querySelector('button[name="btnPublishTemplate"]');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerText = 'Publishing...';
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = 'btnPublishTemplate';
-                hiddenInput.value = '1';
-                e.target.appendChild(hiddenInput);
-            }
+            const button = document.querySelector('button[name="btnPublishTemplate"]');
+            button.disabled = true;
+            button.textContent = 'Publishing...';
             return true;
         }
 

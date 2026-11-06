@@ -51,15 +51,25 @@ CREATE TABLE IF NOT EXISTS grade_templates (
 CREATE INDEX IF NOT EXISTS idx_grade_templates_user ON grade_templates(user_id);
 CREATE INDEX IF NOT EXISTS idx_grade_templates_class_code ON grade_templates(class_code);
 
-CREATE TABLE IF NOT EXISTS template_components (
+CREATE TABLE IF NOT EXISTS midterms_template_components (
     id SERIAL PRIMARY KEY,
     template_id INT NOT NULL REFERENCES grade_templates(template_id) ON DELETE CASCADE,
     component_name VARCHAR(100) NOT NULL,
-    weight INT NOT NULL DEFAULT 0,
+    weight INT NOT NULL DEFAULT 0 CHECK (weight BETWEEN 0 AND 100),
     is_exam BOOLEAN NOT NULL DEFAULT FALSE
 );
+CREATE INDEX IF NOT EXISTS idx_midterms_components_template ON midterms_template_components(template_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_midterms_one_exam ON midterms_template_components(template_id) WHERE is_exam;
 
-CREATE INDEX IF NOT EXISTS idx_template_components_template ON template_components(template_id);
+CREATE TABLE IF NOT EXISTS finals_template_components (
+    id SERIAL PRIMARY KEY,
+    template_id INT NOT NULL REFERENCES grade_templates(template_id) ON DELETE CASCADE,
+    component_name VARCHAR(100) NOT NULL,
+    weight INT NOT NULL DEFAULT 0 CHECK (weight BETWEEN 0 AND 100),
+    is_exam BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_finals_components_template ON finals_template_components(template_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_finals_one_exam ON finals_template_components(template_id) WHERE is_exam;
 
 CREATE TABLE IF NOT EXISTS enrolled_courses (
     enrollment_id SERIAL PRIMARY KEY,
@@ -78,47 +88,43 @@ CREATE INDEX IF NOT EXISTS idx_enrolled_courses_template ON enrolled_courses(tem
 CREATE TABLE IF NOT EXISTS student_component_scores (
     score_id SERIAL PRIMARY KEY,
     enrollment_id INT NOT NULL REFERENCES enrolled_courses(enrollment_id) ON DELETE CASCADE,
-    component_id INT NOT NULL REFERENCES template_components(id) ON DELETE CASCADE,
+    midterm_component_id INT REFERENCES midterms_template_components(id) ON DELETE CASCADE,
+    final_component_id INT REFERENCES finals_template_components(id) ON DELETE CASCADE,
     assessment_title VARCHAR(100) NOT NULL CHECK (length(trim(assessment_title)) > 0),
     raw_score NUMERIC(9,2) NOT NULL CHECK (raw_score >= 0),
     total_items INT NOT NULL CHECK (total_items > 0),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT student_component_scores_check CHECK (raw_score <= total_items)
+    CONSTRAINT student_component_scores_check CHECK (raw_score <= total_items),
+    CONSTRAINT student_component_scores_one_period CHECK ((midterm_component_id IS NOT NULL AND final_component_id IS NULL)
+        OR (midterm_component_id IS NULL AND final_component_id IS NOT NULL))
 );
 
-CREATE INDEX IF NOT EXISTS idx_student_component_scores_component ON student_component_scores(component_id);
+CREATE INDEX IF NOT EXISTS idx_student_component_scores_midterm ON student_component_scores(midterm_component_id);
+CREATE INDEX IF NOT EXISTS idx_student_component_scores_final ON student_component_scores(final_component_id);
 CREATE INDEX IF NOT EXISTS idx_student_component_scores_enrollment ON student_component_scores(enrollment_id);
 
 CREATE TABLE IF NOT EXISTS coursework_items (
     item_id SERIAL PRIMARY KEY,
-    component_id INT NOT NULL REFERENCES template_components(id) ON DELETE CASCADE,
+    midterm_component_id INT REFERENCES midterms_template_components(id) ON DELETE CASCADE,
+    final_component_id INT REFERENCES finals_template_components(id) ON DELETE CASCADE,
     item_title VARCHAR(100) NOT NULL,
     item_type VARCHAR(50) NOT NULL DEFAULT 'activity',
     max_score NUMERIC(7,2) NOT NULL DEFAULT 100.00 CHECK (max_score > 0),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_coursework_items_component ON coursework_items(component_id);
-
-CREATE TABLE IF NOT EXISTS student_scores (
-    score_id SERIAL PRIMARY KEY,
-    enrollment_id INT NOT NULL REFERENCES enrolled_courses(enrollment_id) ON DELETE CASCADE,
-    item_id INT NOT NULL REFERENCES coursework_items(item_id) ON DELETE CASCADE,
-    score_obtained NUMERIC(7,2) NOT NULL DEFAULT 0.00 CHECK (score_obtained >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_enrollment_item UNIQUE (enrollment_id, item_id)
+    CONSTRAINT coursework_items_one_period CHECK ((midterm_component_id IS NOT NULL AND final_component_id IS NULL)
+        OR (midterm_component_id IS NULL AND final_component_id IS NOT NULL))
 );
 
-CREATE INDEX IF NOT EXISTS idx_student_scores_enrollment ON student_scores(enrollment_id);
-CREATE INDEX IF NOT EXISTS idx_student_scores_item ON student_scores(item_id);
+CREATE INDEX IF NOT EXISTS idx_coursework_items_midterm ON coursework_items(midterm_component_id);
+CREATE INDEX IF NOT EXISTS idx_coursework_items_final ON coursework_items(final_component_id);
 
 -- The application uses its PHP session to scope queries to the signed-in user.
 ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE otp_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE grade_templates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE template_components ENABLE ROW LEVEL SECURITY;
+ALTER TABLE midterms_template_components ENABLE ROW LEVEL SECURITY;
+ALTER TABLE finals_template_components ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrolled_courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE student_component_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE coursework_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE student_scores ENABLE ROW LEVEL SECURITY;

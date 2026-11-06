@@ -18,12 +18,7 @@ if ($templateId > 0) {
     $ownerRow = $ownerQuery->fetch();
 
     if ($ownerRow && (int)$ownerRow['user_id'] === $userId) {
-        $delEnroll = $conn->prepare("DELETE FROM enrolled_courses WHERE template_id = ?");
-        $delEnroll->execute([$templateId]);
-
-        $delComp = $conn->prepare("DELETE FROM template_components WHERE template_id = ?");
-        $delComp->execute([$templateId]);
-
+        // One delete cascades to enrollments, both periods and their scores.
         $delTpl = $conn->prepare("DELETE FROM grade_templates WHERE template_id = ? AND user_id = ?");
         $delTpl->execute([$templateId, $userId]);
     } else {

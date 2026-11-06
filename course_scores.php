@@ -11,6 +11,7 @@ if ((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
 }
 require __DIR__ . '/php/db.php';
 require_once __DIR__ . '/php/grade_calculator.php';
+require_once __DIR__ . '/php/course_components.php';
 
 $userId = (int)$_SESSION['user_id'];
 $enrollmentId = filter_var($_GET['enrollment_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
@@ -24,20 +25,12 @@ if (!$course) {
     exit('Course not found in your enrollments.');
 }
 
-$componentStmt = $conn->prepare('SELECT id, component_name AS name, weight, is_exam FROM template_components WHERE template_id = ? ORDER BY id');
-$componentStmt->execute([$course['template_id']]);
-$components = $componentStmt->fetchAll();
-foreach ($components as $index => $component) {
-    $components[$index]['is_exam'] = filter_var($component['is_exam'], FILTER_VALIDATE_BOOLEAN);
-}
+$components = loadTemplateComponents($conn, (int)$course['template_id']);
+$componentsById = array_column($components, null, 'id');
 $examComponents = array_filter($components, fn($component) => $component['is_exam']);
-$scoreStmt = $conn->prepare('SELECT scs.* FROM student_component_scores scs
-    JOIN template_components tc ON tc.id = scs.component_id
-    WHERE scs.enrollment_id = ? AND tc.template_id = ? ORDER BY scs.score_id');
-$scoreStmt->execute([$enrollmentId, $course['template_id']]);
-$scores = $scoreStmt->fetchAll();
+$scores = loadEnrollmentScores($conn, (int)$enrollmentId, (int)$course['template_id']);
 $entriesByComponent = [];
-foreach ($scores as $score) $entriesByComponent[(int)$score['component_id']][] = $score;
+foreach ($scores as $score) $entriesByComponent[$score['component_id']][] = $score;
 
 if (!isset($_SESSION['score_csrf_token'])) $_SESSION['score_csrf_token'] = bin2hex(random_bytes(32));
 $errors = [];
@@ -48,15 +41,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'The form was incomplete. Please reload and try again.';
     } else {
         $postedEntries = $_POST['entries'];
-        $componentIds = array_map('intval', array_column($components, 'id'));
+        $componentIds = array_column($components, 'id');
         foreach (array_keys($postedEntries) as $id) {
-            if (!ctype_digit((string)$id) || !in_array((int)$id, $componentIds, true)) {
+            if (!in_array((string)$id, $componentIds, true)) {
                 $errors[] = 'An entry does not belong to this course.';
             }
         }
         $newScores = [];
         foreach ($components as $component) {
-            $componentId = (int)$component['id'];
+            $componentId = $component['id'];
             $rows = $postedEntries[$componentId] ?? null;
             if (!is_array($rows) || count($rows) === 0) {
                 $errors[] = 'Each component must have at least one entry row.';
@@ -93,13 +86,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $deleteStmt = $conn->prepare('DELETE FROM student_component_scores WHERE enrollment_id = ?
                     AND enrollment_id IN (SELECT enrollment_id FROM enrolled_courses WHERE user_id = ?)');
                 $deleteStmt->execute([$enrollmentId, $userId]);
-                $insertStmt = $conn->prepare('INSERT INTO student_component_scores
-                    (enrollment_id, component_id, assessment_title, raw_score, total_items)
-                    SELECT ec.enrollment_id, tc.id, ?, ?, ? FROM enrolled_courses ec
-                    JOIN template_components tc ON tc.template_id = ec.template_id
-                    WHERE ec.enrollment_id = ? AND ec.user_id = ? AND tc.id = ?');
+                $insertStatements = [];
+                $columns = ['midterms' => 'midterm_component_id', 'finals' => 'final_component_id'];
+                foreach (componentTables() as $period => $table) {
+                    $column = $columns[$period];
+                    $insertStatements[$period] = $conn->prepare("INSERT INTO student_component_scores
+                        (enrollment_id, $column, assessment_title, raw_score, total_items)
+                        SELECT ec.enrollment_id, tc.id, ?, ?, ? FROM enrolled_courses ec
+                        JOIN $table tc ON tc.template_id = ec.template_id
+                        WHERE ec.enrollment_id = ? AND ec.user_id = ? AND tc.id = ?");
+                }
                 foreach ($newScores as $entry) {
-                    $insertStmt->execute([$entry['assessment_title'], $entry['raw_score'], $entry['total_items'], $enrollmentId, $userId, $entry['component_id']]);
+                    $component = $componentsById[$entry['component_id']];
+                    $insertStmt = $insertStatements[$component['period']];
+                    $insertStmt->execute([$entry['assessment_title'], $entry['raw_score'], $entry['total_items'], $enrollmentId, $userId, $component['database_id']]);
                     if ($insertStmt->rowCount() !== 1) throw new RuntimeException('Enrollment or component changed while saving.');
                 }
                 $conn->commit();
@@ -156,13 +156,15 @@ function scoreText($value): string {
 
         <form id="courseScoresForm" method="POST" action="course_scores.php?enrollment_id=<?php echo $enrollmentId; ?>" data-unsaved="<?php echo $errors ? 'true' : 'false'; ?>" class="space-y-5">
             <input type="hidden" name="csrf_token" value="<?php echo scoreText($_SESSION['score_csrf_token']); ?>">
-            <?php foreach ($components as $component): ?>
+            <?php foreach (gradingPeriods() as $period => $label): ?>
+            <h2 class="text-lg font-extrabold text-maroon-900 pt-3"><?php echo $label; ?> <span class="text-xs font-medium text-stone-500">100% period weight · 50% of overall grade</span></h2>
+            <?php foreach (array_filter($components, fn($component) => $component['period'] === $period) as $component): ?>
                 <?php
-                $componentId = (int)$component['id'];
+                $componentId = $component['id'];
                 $rows = $entriesByComponent[$componentId] ?? [];
                 if (!$rows) $rows = [['assessment_title' => 'Entry 1', 'raw_score' => '', 'total_items' => '']];
                 ?>
-                <section data-component-id="<?php echo $componentId; ?>" data-weight="<?php echo (int)$component['weight']; ?>" data-is-exam="<?php echo $component['is_exam'] ? '1' : '0'; ?>" data-next-index="<?php echo count($rows); ?>"
+                <section data-component-id="<?php echo scoreText($componentId); ?>" data-period="<?php echo $component['period']; ?>" data-weight="<?php echo (int)$component['weight']; ?>" data-is-exam="<?php echo $component['is_exam'] ? '1' : '0'; ?>" data-next-index="<?php echo count($rows); ?>"
                     class="score-component bg-white p-5 sm:p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
                     <div class="flex items-center justify-between gap-3">
                         <h2 class="font-bold text-slate-900"><?php echo scoreText($component['name']); ?></h2>
@@ -193,6 +195,7 @@ function scoreText($value): string {
                     </div>
                 </section>
             <?php endforeach; ?>
+            <?php endforeach; ?>
             <?php if (!$components): ?><p class="text-sm text-stone-600">This template has no components. Ask your professor to complete it.</p><?php endif; ?>
             <input type="hidden" name="scores_complete" value="1">
         </form>
@@ -201,9 +204,9 @@ function scoreText($value): string {
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h2 class="font-bold text-slate-900">Exam predictor</h2>
-                    <p class="text-xs text-stone-500 mt-1">Choose a pending examination marked by your professor.</p>
+                    <p class="text-xs text-stone-500 mt-1">Find the exam score needed for your overall course grade: 50% Midterms + 50% Finals.</p>
                 </div>
-                <a href="student_dashboard.php#grades" class="text-xs font-bold text-maroon-800 hover:underline">Target grade: <?php echo number_format((float)$course['target_grade'], 2); ?></a>
+                <a href="student_dashboard.php#grades" class="text-xs font-bold text-maroon-800 hover:underline">Overall target: <?php echo number_format((float)$course['target_grade'], 2); ?></a>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label class="text-xs font-semibold text-stone-600" for="predictorExam">Exam
@@ -212,7 +215,7 @@ function scoreText($value): string {
                             <option value="">No exams marked</option>
                         <?php else: ?>
                             <?php foreach ($examComponents as $examComponent): ?>
-                                <option value="<?php echo (int)$examComponent['id']; ?>"><?php echo scoreText($examComponent['name']); ?></option>
+                                <option value="<?php echo scoreText($examComponent['id']); ?>"><?php echo gradingPeriods()[$examComponent['period']]; ?> · <?php echo scoreText($examComponent['name']); ?></option>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </select>
@@ -224,14 +227,23 @@ function scoreText($value): string {
             </div>
             <div class="bg-stone-50 border border-stone-200 p-4 rounded-2xl space-y-1">
                 <p id="examPredictionResult" class="font-bold text-maroon-900 text-sm" aria-live="polite">Select the examination and enter its maximum score.</p>
-                <p id="examPredictionNote" class="text-xs text-stone-500">Uses the full course weights and currently recorded scores. Other pending exams add no points yet. Predictions are not saved as scores.</p>
+                <p id="examPredictionNote" class="text-xs text-stone-500">Uses both periods and the overall target set in Grade Entry. Predictions are not saved as scores.</p>
             </div>
         </section>
 
         <div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 border-b border-stone-100">
+                <?php foreach (gradingPeriods() as $period => $label): ?>
+                <div>
+                    <p class="text-xs font-semibold text-stone-500"><?php echo $label; ?> · 50% of overall grade</p>
+                    <p id="periodGrade-<?php echo $period; ?>" class="font-bold text-maroon-900 mt-1"><?php echo $result['periods'][$period]['grade'] === null ? scoreText($result['periods'][$period]['status']) : number_format($result['periods'][$period]['grade'], 2); ?></p>
+                    <p id="periodPercentage-<?php echo $period; ?>" class="text-xs text-stone-500 mt-1"></p>
+                </div>
+                <?php endforeach; ?>
+            </div>
                 <div class="flex items-start justify-between gap-4">
                     <div>
-                        <p class="text-xs font-semibold text-stone-500">Course grade preview</p>
+                        <p class="text-xs font-semibold text-stone-500">Overall course grade preview</p>
                         <p id="courseGradePreview" class="text-2xl font-extrabold text-maroon-900 mt-1" aria-live="polite"><?php echo $result['grade'] === null ? scoreText($result['status']) : number_format($result['grade'], 2); ?></p>
                         <p id="coursePercentagePreview" class="text-sm text-stone-500 mt-1"><?php if ($result['percentage'] !== null) echo number_format($result['percentage'], 2) . ($result['status'] === 'In Progress' ? '% earned so far' : '% overall'); ?></p>
                     </div>

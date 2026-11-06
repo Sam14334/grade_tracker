@@ -11,6 +11,7 @@ if ((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
 }
 include 'php/db.php';
 require_once 'php/grade_calculator.php';
+require_once 'php/course_components.php';
 if (!isset($_SESSION['score_csrf_token'])) $_SESSION['score_csrf_token'] = bin2hex(random_bytes(32));
 $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email']);
@@ -27,29 +28,11 @@ $enrolledStmt = $conn->prepare("
 $enrolledStmt->execute([$userId]);
 $dbEnrolled = [];
 
-$compStmt = $conn->prepare("SELECT id, component_name, weight, is_exam FROM template_components WHERE template_id = ? ORDER BY id");
-$scoreStmt = $conn->prepare("
-    SELECT scs.enrollment_id, scs.component_id, scs.raw_score, scs.total_items
-    FROM student_component_scores scs
-    JOIN enrolled_courses ec ON ec.enrollment_id = scs.enrollment_id
-    JOIN template_components tc ON tc.id = scs.component_id AND tc.template_id = ec.template_id
-    WHERE ec.user_id = ?
-");
-$scoreStmt->execute([$userId]);
-$scoresByEnrollment = [];
-while ($score = $scoreStmt->fetch()) {
-    $scoresByEnrollment[(int)$score['enrollment_id']][] = $score;
-}
-
 while ($row = $enrolledStmt->fetch()) {
     $tId = (int)$row['template_id'];
-    $compStmt->execute([$tId]);
-    $comps = [];
-    while ($c = $compStmt->fetch()) {
-        $comps[] = ['id' => (int)$c['id'], 'name' => $c['component_name'], 'weight' => (int)$c['weight'],
-            'is_exam' => filter_var($c['is_exam'], FILTER_VALIDATE_BOOLEAN)];
-    }
-    $result = calculateCourseGrade($comps, $scoresByEnrollment[(int)$row['enrollment_id']] ?? []);
+    $comps = loadTemplateComponents($conn, $tId);
+    $scores = loadEnrollmentScores($conn, (int)$row['enrollment_id'], $tId);
+    $result = calculateCourseGrade($comps, $scores);
     $dbEnrolled[] = [
         'id' => $tId,
         'templateId' => $tId,
@@ -62,6 +45,7 @@ while ($row = $enrolledStmt->fetch()) {
         'grade' => $result['grade'],
         'percentage' => $result['percentage'],
         'gradeStatus' => $result['status'],
+        'periods' => $result['periods'],
         'target' => (float)$row['target_grade'],
     ];
 }
@@ -297,11 +281,14 @@ while ($row = $enrolledStmt->fetch()) {
                                             </div>
                                         </div>
                                         <div class="bg-stone-50 p-3 rounded-2xl border border-stone-200 text-xs space-y-1.5">
-                                            <?php foreach ($template['components'] as $component): ?>
+                                            <?php foreach (gradingPeriods() as $period => $label): ?>
+                                                <p class="font-bold text-maroon-900 pt-2"><?php echo $label; ?> · 100%</p>
+                                            <?php foreach (array_filter($template['components'], fn($component) => $component['period'] === $period) as $component): ?>
                                                 <div class="flex justify-between text-stone-600">
                                                     <span><?php echo htmlspecialchars($component['name'], ENT_QUOTES, 'UTF-8'); ?>:</span>
                                                     <span class="font-bold text-slate-800"><?php echo (int)$component['weight']; ?>%</span>
                                                 </div>
+                                            <?php endforeach; ?>
                                             <?php endforeach; ?>
                                         </div>
                                     </div>

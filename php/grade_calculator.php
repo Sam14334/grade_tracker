@@ -16,10 +16,14 @@ function percentageToGrade(float $percentage): float {
     return 5.00;
 }
 
-function calculateCourseGrade(array $components, array $scores): array {
+function gradingPeriods(): array {
+    return ['midterms' => 'Midterms', 'finals' => 'Finals'];
+}
+
+function calculatePeriodGrade(array $components, array $scores): array {
     $totals = [];
     foreach ($scores as $score) {
-        $id = (int)$score['component_id'];
+        $id = (string)$score['component_id'];
         if (!isset($totals[$id])) $totals[$id] = ['score' => 0, 'max' => 0];
         $totals[$id]['score'] += (float)$score['raw_score'];
         $totals[$id]['max'] += (int)$score['total_items'];
@@ -34,7 +38,7 @@ function calculateCourseGrade(array $components, array $scores): array {
         $weight = (int)$component['weight'];
         $weightTotal += $weight;
         if ($weight < 0 || $weight > 100) $validWeights = false;
-        $total = $totals[(int)$component['id']] ?? ['score' => 0, 'max' => 0];
+        $total = $totals[(string)$component['id']] ?? ['score' => 0, 'max' => 0];
         if ($total['max'] <= 0) {
             if (filter_var($component['is_exam'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
                 $pendingExams = true;
@@ -56,4 +60,29 @@ function calculateCourseGrade(array $components, array $scores): array {
         return ['grade' => null, 'percentage' => $percentage, 'status' => 'In Progress'];
     }
     return ['grade' => percentageToGrade($percentage), 'percentage' => $percentage, 'status' => 'Complete'];
+}
+
+function calculateCourseGrade(array $components, array $scores): array {
+    $periods = [];
+    foreach (gradingPeriods() as $period => $label) {
+        $periodComponents = array_values(array_filter($components, fn($component) => $component['period'] === $period));
+        $periods[$period] = calculatePeriodGrade($periodComponents, $scores);
+    }
+    $statuses = array_column($periods, 'status');
+    $status = 'Complete';
+    foreach (['Invalid weights', 'Incomplete', 'In Progress'] as $pendingStatus) {
+        if (in_array($pendingStatus, $statuses, true)) {
+            $status = $pendingStatus;
+            break;
+        }
+    }
+    $midterms = $periods['midterms']['percentage'];
+    $finals = $periods['finals']['percentage'];
+    $percentage = $midterms !== null && $finals !== null ? ($midterms + $finals) / 2 : null;
+    return [
+        'grade' => $status === 'Complete' ? percentageToGrade($percentage) : null,
+        'percentage' => $percentage,
+        'status' => $status,
+        'periods' => $periods,
+    ];
 }
