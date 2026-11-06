@@ -11,13 +11,14 @@ if ((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
 }
 include 'php/db.php';
 require_once 'php/grade_calculator.php';
+if (!isset($_SESSION['score_csrf_token'])) $_SESSION['score_csrf_token'] = bin2hex(random_bytes(32));
 $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email']);
 $userInitial = strtoupper(substr($userName, 0, 1));
 
 // Fetch only courses enrolled by the signed-in student.
 $enrolledStmt = $conn->prepare("
-    SELECT gt.template_id, gt.course_code, gt.course_title, gt.course_unit, gt.class_code, ec.enrollment_id, gt.created_at
+    SELECT gt.template_id, gt.course_code, gt.course_title, gt.course_unit, gt.class_code, ec.enrollment_id, ec.target_grade, gt.created_at
     FROM grade_templates gt
     JOIN enrolled_courses ec ON gt.template_id = ec.template_id
     WHERE ec.user_id = ?
@@ -26,7 +27,7 @@ $enrolledStmt = $conn->prepare("
 $enrolledStmt->execute([$userId]);
 $dbEnrolled = [];
 
-$compStmt = $conn->prepare("SELECT id, component_name, weight FROM template_components WHERE template_id = ? ORDER BY id");
+$compStmt = $conn->prepare("SELECT id, component_name, weight, is_exam FROM template_components WHERE template_id = ? ORDER BY id");
 $scoreStmt = $conn->prepare("
     SELECT scs.enrollment_id, scs.component_id, scs.raw_score, scs.total_items
     FROM student_component_scores scs
@@ -45,7 +46,8 @@ while ($row = $enrolledStmt->fetch()) {
     $compStmt->execute([$tId]);
     $comps = [];
     while ($c = $compStmt->fetch()) {
-        $comps[] = ['id' => (int)$c['id'], 'name' => $c['component_name'], 'weight' => (int)$c['weight']];
+        $comps[] = ['id' => (int)$c['id'], 'name' => $c['component_name'], 'weight' => (int)$c['weight'],
+            'is_exam' => filter_var($c['is_exam'], FILTER_VALIDATE_BOOLEAN)];
     }
     $result = calculateCourseGrade($comps, $scoresByEnrollment[(int)$row['enrollment_id']] ?? []);
     $dbEnrolled[] = [
@@ -60,6 +62,7 @@ while ($row = $enrolledStmt->fetch()) {
         'grade' => $result['grade'],
         'percentage' => $result['percentage'],
         'gradeStatus' => $result['status'],
+        'target' => (float)$row['target_grade'],
     ];
 }
 ?>
@@ -194,6 +197,11 @@ while ($row = $enrolledStmt->fetch()) {
             </div>
 
             <div id="tab-content-grades" class="hidden space-y-6">
+                <?php if (($_GET['target'] ?? '') === 'saved'): ?>
+                    <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Target grade saved. The exam predictor will use this target.</p>
+                <?php elseif (($_GET['target'] ?? '') === 'error'): ?>
+                    <p role="alert" class="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-sm">Could not save the target grade. Please try again.</p>
+                <?php endif; ?>
                 <?php if (($_GET['unenrolled'] ?? '') === 'success'): ?>
                     <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Course removed from your enrollments.</p>
                 <?php elseif (($_GET['unenrolled'] ?? '') === 'error'): ?>
@@ -203,7 +211,7 @@ while ($row = $enrolledStmt->fetch()) {
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="font-bold text-slate-800 text-lg">Input & Calculate Subject Grades</h3>
-                            <p class="text-xs text-stone-500">Click a course to enter component scores. Saved scores calculate its grade and GWA automatically. Incomplete courses are excluded from GWA; target grades and manually added rows last until you reload.</p>
+                            <p class="text-xs text-stone-500">Click a course to enter component scores. Target grades save when changed and are used by the exam predictor. Courses with pending exams or missing coursework are excluded from GWA; manually added rows last until you reload.</p>
                         </div>
                         <button onclick="recalculateGradesAndStats()" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-2">
                             <i class="fa-solid fa-rotate"></i>
@@ -219,7 +227,7 @@ while ($row = $enrolledStmt->fetch()) {
                                     <th class="p-3">Course Title</th>
                                     <th class="p-3">Units</th>
                                     <th class="p-3">Grade Scale (1.00 - 5.00)</th>
-                                    <th class="p-3">Target Grade (1.00 - 5.00)</th>
+                                    <th class="p-3">Target Grade (1.00 - 3.00)</th>
                                     <th class="p-3">Status Diagnostic</th>
                                     <th class="p-3 text-center">Action</th>
                                 </tr>
@@ -313,6 +321,8 @@ while ($row = $enrolledStmt->fetch()) {
     <script>
         window.studentDashboardData = {
             serverRenderedTemplates: true,
+            csrfToken: <?php echo json_encode($_SESSION['score_csrf_token']); ?>,
+            targetGrades: <?php echo json_encode(array_values(array_filter(array_column(pupGradeScale(), 1), fn($grade) => $grade <= 3.00))); ?>,
             enrolledCourses: <?php echo json_encode($dbEnrolled, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE); ?>
         };
     </script>

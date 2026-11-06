@@ -26,8 +26,9 @@ function calculateCourseGrade(array $components, array $scores): array {
     }
 
     $weightTotal = 0;
-    $percentage = 0;
-    $complete = count($components) > 0;
+    $percentage = 0.0;
+    $pendingExams = false;
+    $missingCoursework = false;
     $validWeights = count($components) > 0;
     foreach ($components as $component) {
         $weight = (int)$component['weight'];
@@ -35,7 +36,11 @@ function calculateCourseGrade(array $components, array $scores): array {
         if ($weight < 0 || $weight > 100) $validWeights = false;
         $total = $totals[(int)$component['id']] ?? ['score' => 0, 'max' => 0];
         if ($total['max'] <= 0) {
-            $complete = false;
+            if (filter_var($component['is_exam'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                $pendingExams = true;
+            } else {
+                $missingCoursework = true;
+            }
         } else {
             $percentage += ($total['score'] / $total['max']) * $weight;
         }
@@ -44,8 +49,11 @@ function calculateCourseGrade(array $components, array $scores): array {
     if (!$validWeights || $weightTotal !== 100) {
         return ['grade' => null, 'percentage' => null, 'status' => 'Invalid weights'];
     }
-    if (!$complete) {
+    if ($missingCoursework) {
         return ['grade' => null, 'percentage' => null, 'status' => 'Incomplete'];
+    }
+    if ($pendingExams) {
+        return ['grade' => null, 'percentage' => $percentage, 'status' => 'In Progress'];
     }
     return ['grade' => percentageToGrade($percentage), 'percentage' => $percentage, 'status' => 'Complete'];
 }

@@ -26,14 +26,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || is
         $componentNames = $_POST['component_name'] ?? $_POST['component_id'] ?? [];
         $weights = $_POST['weight'] ?? [];
 
-        $stmtComp = $conn->prepare("INSERT INTO template_components (template_id, component_name, weight) VALUES (?, ?, ?)");
+        $stmtComp = $conn->prepare("INSERT INTO template_components (template_id, component_name, weight, is_exam) VALUES (?, ?, ?, ?)");
 
-        for ($i = 0; $i < count($componentNames); $i++) {
-            $compName = trim((string)$componentNames[$i]);
+        foreach ($componentNames as $i => $componentName) {
+            $compName = trim((string)$componentName);
             $weight = (int)($weights[$i] ?? 0);
+            $isExam = isset($_POST['is_exam'][$i]) && $_POST['is_exam'][$i] === '1';
 
             if (!empty($compName)) {
-                $stmtComp->execute([$templateId, $compName, $weight]);
+                $stmtComp->execute([$templateId, $compName, $weight, $isExam ? 'true' : 'false']);
             }
         }
 

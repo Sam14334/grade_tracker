@@ -14,7 +14,7 @@ require_once __DIR__ . '/php/grade_calculator.php';
 
 $userId = (int)$_SESSION['user_id'];
 $enrollmentId = filter_var($_GET['enrollment_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-$courseStmt = $conn->prepare('SELECT ec.enrollment_id, gt.template_id, gt.course_code, gt.course_title, gt.course_unit
+$courseStmt = $conn->prepare('SELECT ec.enrollment_id, ec.target_grade, gt.template_id, gt.course_code, gt.course_title, gt.course_unit
     FROM enrolled_courses ec JOIN grade_templates gt ON gt.template_id = ec.template_id
     WHERE ec.enrollment_id = ? AND ec.user_id = ?');
 $courseStmt->execute([$enrollmentId ?: 0, $userId]);
@@ -24,9 +24,13 @@ if (!$course) {
     exit('Course not found in your enrollments.');
 }
 
-$componentStmt = $conn->prepare('SELECT id, component_name AS name, weight FROM template_components WHERE template_id = ? ORDER BY id');
+$componentStmt = $conn->prepare('SELECT id, component_name AS name, weight, is_exam FROM template_components WHERE template_id = ? ORDER BY id');
 $componentStmt->execute([$course['template_id']]);
 $components = $componentStmt->fetchAll();
+foreach ($components as $index => $component) {
+    $components[$index]['is_exam'] = filter_var($component['is_exam'], FILTER_VALIDATE_BOOLEAN);
+}
+$examComponents = array_filter($components, fn($component) => $component['is_exam']);
 $scoreStmt = $conn->prepare('SELECT scs.* FROM student_component_scores scs
     JOIN template_components tc ON tc.id = scs.component_id
     WHERE scs.enrollment_id = ? AND tc.template_id = ? ORDER BY scs.score_id');
@@ -147,7 +151,7 @@ function scoreText($value): string {
                 <?php foreach (array_unique($errors) as $error): ?><p><?php echo scoreText($error); ?></p><?php endforeach; ?>
             </div>
         <?php elseif (isset($_GET['saved'])): ?>
-            <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Scores saved. Your calculator and GWA now use these scores.</p>
+            <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Scores saved. Your calculator now reflects these scores.</p>
         <?php endif; ?>
 
         <form id="courseScoresForm" method="POST" action="course_scores.php?enrollment_id=<?php echo $enrollmentId; ?>" data-unsaved="<?php echo $errors ? 'true' : 'false'; ?>" class="space-y-5">
@@ -158,7 +162,7 @@ function scoreText($value): string {
                 $rows = $entriesByComponent[$componentId] ?? [];
                 if (!$rows) $rows = [['assessment_title' => 'Entry 1', 'raw_score' => '', 'total_items' => '']];
                 ?>
-                <section data-component-id="<?php echo $componentId; ?>" data-weight="<?php echo (int)$component['weight']; ?>" data-next-index="<?php echo count($rows); ?>"
+                <section data-component-id="<?php echo $componentId; ?>" data-weight="<?php echo (int)$component['weight']; ?>" data-is-exam="<?php echo $component['is_exam'] ? '1' : '0'; ?>" data-next-index="<?php echo count($rows); ?>"
                     class="score-component bg-white p-5 sm:p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
                     <div class="flex items-center justify-between gap-3">
                         <h2 class="font-bold text-slate-900"><?php echo scoreText($component['name']); ?></h2>
@@ -190,24 +194,55 @@ function scoreText($value): string {
                 </section>
             <?php endforeach; ?>
             <?php if (!$components): ?><p class="text-sm text-stone-600">This template has no components. Ask your professor to complete it.</p><?php endif; ?>
+            <input type="hidden" name="scores_complete" value="1">
+        </form>
 
-            <div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
+        <section id="examPredictor" class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="font-bold text-slate-900">Exam predictor</h2>
+                    <p class="text-xs text-stone-500 mt-1">Choose a pending examination marked by your professor.</p>
+                </div>
+                <a href="student_dashboard.php#grades" class="text-xs font-bold text-maroon-800 hover:underline">Target grade: <?php echo number_format((float)$course['target_grade'], 2); ?></a>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label class="text-xs font-semibold text-stone-600" for="predictorExam">Exam
+                    <select id="predictorExam" <?php if (!$examComponents) echo 'disabled'; ?> class="mt-1 block w-full px-3 py-2.5 rounded-xl border border-stone-300 text-xs text-slate-800 outline-none focus:border-maroon-800">
+                        <?php if (!$examComponents): ?>
+                            <option value="">No exams marked</option>
+                        <?php else: ?>
+                            <?php foreach ($examComponents as $examComponent): ?>
+                                <option value="<?php echo (int)$examComponent['id']; ?>"><?php echo scoreText($examComponent['name']); ?></option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                </label>
+                <label class="text-xs font-semibold text-stone-600" for="predictorMax">Exam max score
+                    <input type="number" id="predictorMax" min="1" max="2147483647" step="1" placeholder="e.g. 100" <?php if (!$examComponents) echo 'disabled'; ?>
+                        class="mt-1 block w-full px-3 py-2.5 rounded-xl border border-stone-300 text-xs text-slate-800 outline-none focus:border-maroon-800">
+                </label>
+            </div>
+            <div class="bg-stone-50 border border-stone-200 p-4 rounded-2xl space-y-1">
+                <p id="examPredictionResult" class="font-bold text-maroon-900 text-sm" aria-live="polite">Select the examination and enter its maximum score.</p>
+                <p id="examPredictionNote" class="text-xs text-stone-500">Uses the full course weights and currently recorded scores. Other pending exams add no points yet. Predictions are not saved as scores.</p>
+            </div>
+        </section>
+
+        <div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <p class="text-xs font-semibold text-stone-500">Course grade preview</p>
                         <p id="courseGradePreview" class="text-2xl font-extrabold text-maroon-900 mt-1" aria-live="polite"><?php echo $result['grade'] === null ? scoreText($result['status']) : number_format($result['grade'], 2); ?></p>
-                        <p id="coursePercentagePreview" class="text-sm text-stone-500 mt-1"></p>
+                        <p id="coursePercentagePreview" class="text-sm text-stone-500 mt-1"><?php if ($result['percentage'] !== null) echo number_format($result['percentage'], 2) . ($result['status'] === 'In Progress' ? '% earned so far' : '% overall'); ?></p>
                     </div>
                     <span id="scoreSaveStatus" class="text-xs text-stone-500"><?php echo $errors ? 'Unsaved changes' : 'Saved scores'; ?></span>
                 </div>
                 <p id="courseCalculationNote" class="text-xs text-stone-500">Each component needs at least one scored entry. Completely blank rows are ignored.</p>
                 <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-stone-100">
                     <a href="student_dashboard.php#grades" class="text-xs font-bold text-stone-600 hover:text-maroon-800">Back to Calculator</a>
-                    <input type="hidden" name="scores_complete" value="1">
-                    <button type="submit" <?php if (!$components) echo 'disabled'; ?> class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white text-xs font-bold rounded-xl disabled:opacity-50">Save Scores</button>
+                    <button type="submit" form="courseScoresForm" <?php if (!$components) echo 'disabled'; ?> class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white text-xs font-bold rounded-xl disabled:opacity-50">Save Scores</button>
                 </div>
             </div>
-        </form>
     </main>
     <template id="scoreEntryTemplate">
         <div class="score-entry grid grid-cols-2 sm:grid-cols-[minmax(0,1fr)_7rem_7rem_4rem] gap-3 items-end">
@@ -223,7 +258,10 @@ function scoreText($value): string {
             <button type="button" class="remove-entry text-xs font-semibold text-rose-600 hover:underline py-2.5 sm:text-right">Remove</button>
         </div>
     </template>
-    <script>window.courseGradeScale = <?php echo json_encode(pupGradeScale()); ?>;</script>
+    <script>
+        window.courseGradeScale = <?php echo json_encode(pupGradeScale()); ?>;
+        window.courseTargetGrade = <?php echo json_encode((float)$course['target_grade']); ?>;
+    </script>
     <script src="js/course-scores.js?v=<?php echo filemtime(__DIR__ . '/js/course-scores.js'); ?>"></script>
 </body>
 </html>

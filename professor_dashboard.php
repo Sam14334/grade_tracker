@@ -155,23 +155,32 @@ while ($row = $templatesStmt->fetch()) {
                             <label class="block font-bold uppercase text-stone-600">Grading System Components & Percentage Weights</label>
 
                             <div class="space-y-2" id="componentContainer">
-                                <div class="flex items-center space-x-2 component-row">
-                                    <input type="text" name="component_name[]" value="Quizzes & Seatwork" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                    <input type="number" name="weight[]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                <div class="flex flex-wrap items-center gap-2 component-row">
+                                    <input type="text" name="component_name[0]" value="Quizzes & Seatwork" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                    <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
+                                        <input type="checkbox" name="is_exam[0]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                                    </label>
+                                    <input type="number" name="weight[0]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                     <span class="font-bold text-stone-400">%</span>
                                     <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
                                 </div>
 
-                                <div class="flex items-center space-x-2 component-row">
-                                    <input type="text" name="component_name[]" value="Midterm Examination" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                    <input type="number" name="weight[]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                <div class="flex flex-wrap items-center gap-2 component-row">
+                                    <input type="text" name="component_name[1]" value="Midterm Examination" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                    <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
+                                        <input type="checkbox" name="is_exam[1]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                                    </label>
+                                    <input type="number" name="weight[1]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                     <span class="font-bold text-stone-400">%</span>
                                     <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
                                 </div>
 
-                                <div class="flex items-center space-x-2 component-row">
-                                    <input type="text" name="component_name[]" value="Final Project & Exam" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                    <input type="number" name="weight[]" value="40" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                <div class="flex flex-wrap items-center gap-2 component-row">
+                                    <input type="text" name="component_name[2]" value="Final Project & Exam" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                    <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
+                                        <input type="checkbox" name="is_exam[2]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                                    </label>
+                                    <input type="number" name="weight[2]" value="40" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                     <span class="font-bold text-stone-400">%</span>
                                     <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
                                 </div>
@@ -204,6 +213,7 @@ while ($row = $templatesStmt->fetch()) {
 
     <script>
         let enrolledTemplates = <?php echo json_encode($publishedTemplates); ?>;
+        let nextComponentIndex = document.querySelectorAll('#componentContainer .component-row').length;
 
         document.addEventListener("DOMContentLoaded", () => {
             const urlParams = new URLSearchParams(window.location.search);
@@ -265,10 +275,14 @@ while ($row = $templatesStmt->fetch()) {
         function addComponentRow() {
             const container = document.getElementById('componentContainer');
             const row = document.createElement('div');
-            row.className = 'flex items-center space-x-2 component-row';
+            const index = nextComponentIndex++;
+            row.className = 'flex flex-wrap items-center gap-2 component-row';
             row.innerHTML = `
-                <input type="text" name="component_name[]" placeholder="Assessment Name" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                <input type="number" name="weight[]" value="10" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                <input type="text" name="component_name[${index}]" placeholder="Assessment Name" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
+                    <input type="checkbox" name="is_exam[${index}]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                </label>
+                <input type="number" name="weight[${index}]" value="10" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                 <span class="font-bold text-stone-400">%</span>
                 <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
             `;

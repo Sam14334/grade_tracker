@@ -12,7 +12,7 @@ let studentGradesData = (window.studentDashboardData?.enrolledCourses ?? []).map
     grade: course.grade ?? null,
     percentage: course.percentage ?? null,
     gradeStatus: course.gradeStatus ?? 'Incomplete',
-    target: 1.00,
+    target: course.target ?? 1.00,
     units: course.units
 }));
 
@@ -218,7 +218,7 @@ function renderGradesTable() {
         if (item.enrollmentId > 0) {
             tr.className = 'hover:bg-maroon-50/50 cursor-pointer transition';
             tr.addEventListener('click', event => {
-                if (!event.target.closest('a, button, input')) window.location.href = courseUrl;
+                if (!event.target.closest('a, button, input, select, form')) window.location.href = courseUrl;
             });
         }
         tr.innerHTML = `
@@ -236,9 +236,16 @@ function renderGradesTable() {
                        data-id="${item.id}" data-units="${item.units}">`}
             </td>
             <td class="p-3">
-                <input type="number" step="0.25" min="1.00" max="5.00" value="${item.target.toFixed(2)}" required
-                       class="target-grade-input w-28 px-3 py-1.5 rounded-lg border border-stone-300 font-bold text-xs focus:border-maroon-800 outline-none"
-                       data-id="${item.id}">
+                ${item.enrollmentId > 0 ? `<form method="POST" action="php/save_target_grade.php">
+                    <input type="hidden" name="enrollment_id" value="${item.enrollmentId}">
+                    <input type="hidden" name="csrf_token" value="${escapeGradeText(window.studentDashboardData.csrfToken)}">` : ''}
+                <select name="target_grade" required aria-label="Target grade for ${escapeGradeText(item.subject)}"
+                    ${item.enrollmentId > 0 ? 'onchange="this.form.requestSubmit()"' : ''}
+                    class="target-grade-input w-28 px-3 py-1.5 rounded-lg border border-stone-300 font-bold text-xs focus:border-maroon-800 outline-none" data-id="${item.id}">
+                    ${(window.studentDashboardData?.targetGrades ?? [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3]).map(grade =>
+                        `<option value="${grade.toFixed(2)}" ${grade === item.target ? 'selected' : ''}>${grade.toFixed(2)}</option>`).join('')}
+                </select>
+                ${item.enrollmentId > 0 ? '</form>' : ''}
             </td>
             <td class="p-3">
                 <span class="${item.grade === null ? 'text-stone-500' : item.grade <= 2.50 ? 'text-emerald-700' : 'text-rose-700'} font-bold text-[11px]">

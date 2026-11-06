@@ -5,12 +5,15 @@ function updateScorePreview() {
     const components = document.querySelectorAll('.score-component');
     let percentage = 0;
     let weightTotal = 0;
-    let complete = components.length > 0;
+    let pendingExams = false;
+    let missingCoursework = false;
     let validWeights = components.length > 0;
     let validEntries = true;
+    const componentTotals = [];
 
     components.forEach(component => {
         const weight = Number(component.dataset.weight);
+        const isExam = component.dataset.isExam === '1';
         weightTotal += weight;
         if (weight < 0 || weight > 100) validWeights = false;
         let earned = 0;
@@ -42,6 +45,11 @@ function updateScorePreview() {
             earned += Number(score.value);
             maximum += Number(max.value);
         });
+        componentTotals.push({
+            id: Number(component.dataset.componentId),
+            name: component.querySelector('h2').textContent,
+            weight, earned, maximum, isExam
+        });
         const summary = component.querySelector('.component-summary');
         if (maximum > 0) {
             const componentPercentage = (earned / maximum) * 100;
@@ -49,8 +57,9 @@ function updateScorePreview() {
             percentage += weighted;
             summary.textContent = `${earned.toFixed(2)} / ${maximum} · ${componentPercentage.toFixed(2)}% · ${weighted.toFixed(2)} weighted points`;
         } else {
-            complete = false;
-            summary.textContent = 'No scored entries yet';
+            if (isExam) pendingExams = true;
+            else missingCoursework = true;
+            summary.textContent = isExam ? 'Awaiting exam score' : 'No scored entries yet';
         }
         rows.forEach(row => {
             const remove = row.querySelector('.remove-entry');
@@ -69,9 +78,13 @@ function updateScorePreview() {
     } else if (!validEntries) {
         gradePreview.textContent = 'Check entries';
         note.textContent = 'Use scores from 0 to their maximum, up to two decimal places, and positive whole-number maximum scores.';
-    } else if (!complete) {
+    } else if (missingCoursework) {
         gradePreview.textContent = 'Incomplete';
-        note.textContent = 'Each component needs at least one scored entry. Completely blank rows are ignored. Partial scores can be saved.';
+        note.textContent = 'Each non-exam component needs at least one scored entry. Partial scores can be saved.';
+    } else if (pendingExams) {
+        gradePreview.textContent = 'In Progress';
+        percentagePreview.textContent = `${percentage.toFixed(2)}% earned so far`;
+        note.textContent = 'The full 100% weight is retained. Pending exams add no points yet. This course is excluded from GWA until all exams are scored.';
     } else {
         const precisePercentage = Number(percentage.toFixed(10));
         const grade = window.courseGradeScale.find(([minimum]) => precisePercentage >= minimum)[1];
@@ -79,7 +92,106 @@ function updateScorePreview() {
         percentagePreview.textContent = `${percentage.toFixed(2)}% overall`;
         note.textContent = 'Calculated from total points within each component and its weight. Save Scores to update your calculator and GWA.';
     }
+    updateExamPrediction(componentTotals, validWeights && weightTotal === 100, validEntries);
 }
+
+function updateExamPrediction(components, validWeights, validEntries) {
+    const result = document.getElementById('examPredictionResult');
+    const note = document.getElementById('examPredictionNote');
+    const maxInput = document.getElementById('predictorMax');
+    const examSelect = document.getElementById('predictorExam');
+    const exams = components.filter(component => component.isExam);
+    const pending = exams.filter(component => component.maximum === 0);
+    // Keep the professor's exam names visible, including exams already scored.
+    [...examSelect.options].forEach(option => {
+        const exam = exams.find(component => component.id === Number(option.value));
+        if (!exam) return;
+        option.disabled = exam.maximum > 0;
+        option.textContent = exam.name + (exam.maximum > 0 ? ' — Scored' : '');
+    });
+    let selected = exams.find(component => component.id === Number(examSelect.value));
+    if (pending.length > 0 && (!selected || selected.maximum > 0)) {
+        selected = pending[0];
+        examSelect.value = String(selected.id);
+        maxInput.value = '';
+    }
+    examSelect.disabled = exams.length === 0;
+    maxInput.disabled = pending.length === 0;
+    const examMaximum = Number(maxInput.value);
+    const target = window.courseGradeScale.find(([, grade]) => grade === window.courseTargetGrade);
+    note.textContent = 'Uses the full course weights and currently recorded scores. Other pending exams add no points yet. Predictions are not saved as scores.';
+    if (exams.length === 0) {
+        result.textContent = 'No exams are marked in this course template.';
+        note.textContent = 'Only components marked Exam by your professor appear here.';
+        return;
+    }
+    if (!validWeights) {
+        result.textContent = 'Correct the template weights before predicting.';
+        return;
+    }
+    if (!validEntries) {
+        result.textContent = 'Correct the score entries above before predicting.';
+        return;
+    }
+    if (pending.length === 0) {
+        result.textContent = 'All exams are scored.';
+        note.textContent = 'Actual exam scores are included in your course grade. Clear both score and max score to make an exam pending again.';
+        return;
+    }
+    if (!selected) {
+        result.textContent = 'Select a pending examination.';
+        return;
+    }
+    if (maxInput.value === '') {
+        result.textContent = 'Enter the examination\'s maximum score.';
+        return;
+    }
+    if (!maxInput.checkValidity() || !/^[1-9]\d*$/.test(maxInput.value)) {
+        result.textContent = 'Enter a positive whole-number exam maximum.';
+        return;
+    }
+    if (!target || target[1] > 3) {
+        result.textContent = 'Choose a passing target grade in Grade Entry.';
+        return;
+    }
+    if (selected.weight <= 0) {
+        result.textContent = 'This component has no weight in your course grade.';
+        return;
+    }
+    const others = components.filter(component => component.id !== selected.id);
+    const missing = others.filter(component => !component.isExam && component.maximum === 0);
+    if (missing.length > 0) {
+        result.textContent = 'Complete the non-exam coursework first.';
+        note.textContent = `Enter at least one scored entry for: ${missing.map(component => component.name).join(', ')}.`;
+        return;
+    }
+
+    const otherPoints = others.reduce((sum, component) =>
+        sum + (component.maximum > 0 ? component.earned / component.maximum * component.weight : 0), 0);
+    const required = (target[0] - otherPoints) / selected.weight * examMaximum;
+    const otherPending = others.filter(component => component.isExam && component.maximum === 0);
+    const pendingNote = otherPending.length > 0
+        ? ` Pending exams (${otherPending.map(component => component.name).join(', ')}) retain their weights and add no points yet. This prediction may change when they are scored.`
+        : '';
+    // Round up to whole points, removing only floating-point noise first.
+    const requiredScore = Math.max(0, Math.ceil(Number(required.toFixed(10))));
+    if (requiredScore > examMaximum) {
+        result.textContent = 'Target unreachable with this exam';
+        note.textContent = `With currently recorded scores, you would need ${requiredScore} / ${examMaximum} on ${selected.name} to reach ${window.courseTargetGrade.toFixed(2)} or better.${pendingNote}`;
+    } else if (requiredScore === 0) {
+        result.textContent = 'Target already secured';
+        note.textContent = `Even 0 / ${examMaximum} on ${selected.name} meets ${window.courseTargetGrade.toFixed(2)} or better using currently recorded scores.${pendingNote}`;
+    } else {
+        result.textContent = `You need at least ${requiredScore} / ${examMaximum} on ${selected.name}.`;
+        note.textContent = `Target: ${window.courseTargetGrade.toFixed(2)} or better (${target[0]}% overall). Required score rounded up to a whole point using the full course weights. This is a prediction, not a saved score.${pendingNote}`;
+    }
+}
+
+document.getElementById('predictorExam').addEventListener('change', () => {
+    document.getElementById('predictorMax').value = '';
+    updateScorePreview();
+});
+document.getElementById('predictorMax').addEventListener('input', updateScorePreview);
 
 function markScoresChanged() {
     scoresChanged = true;
