@@ -3,7 +3,12 @@
 session_start();
 header('Content-Type: application/json');
 
-$email = strtolower(trim($_POST['email'] ?? $_SESSION['pending_otp_email'] ?? ''));
+if (!isset($_SESSION['pending_otp_email']) || isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'error' => 'Please register or sign in to start email verification.']);
+    exit();
+}
+
+$email = strtolower(trim($_SESSION['pending_otp_email']));
 $otp = trim($_POST['otp'] ?? '');
 
 if (empty($email) || empty($otp)) {
@@ -84,7 +89,7 @@ try {
 
     unset($_SESSION['pending_otp_email']);
 
-    echo json_encode(['success' => true, 'redirect' => 'index.html?registered=success']);
+    echo json_encode(['success' => true, 'redirect' => 'index.php?registered=success']);
 } catch (Exception $e) {
     echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
 }

@@ -1,6 +1,10 @@
 <?php
 // login.php
 session_start();
+if (isset($_SESSION['user_id']) || !isset($_POST['btnLogin'])) {
+    header("Location: ../index.php");
+    exit();
+}
 include 'db.php';
 
 if (isset($_POST['btnLogin'])) {
@@ -9,7 +13,7 @@ if (isset($_POST['btnLogin'])) {
     $selectedRole = strtolower(trim($_POST['userRole'] ?? 'student'));
 
     if (empty($email) || empty($password)) {
-        header("Location: ../index.html?error=" . urlencode("Please enter both email and password."));
+        header("Location: ../index.php?error=" . urlencode("Please enter both email and password."));
         exit();
     }
 
@@ -19,12 +23,12 @@ if (isset($_POST['btnLogin'])) {
 
     if ($selectedRole === 'professor') {
         if ($domain !== 'pup.edu.ph') {
-            header("Location: ../index.html?error=" . urlencode("Professor sign-in requires an official @pup.edu.ph email address."));
+            header("Location: ../index.php?error=" . urlencode("Professor sign-in requires an official @pup.edu.ph email address."));
             exit();
         }
     } else {
         if ($domain !== 'iskolarngbayan.pup.edu.ph') {
-            header("Location: ../index.html?error=" . urlencode("Student sign-in requires an official @iskolarngbayan.pup.edu.ph email address."));
+            header("Location: ../index.php?error=" . urlencode("Student sign-in requires an official @iskolarngbayan.pup.edu.ph email address."));
             exit();
         }
     }
@@ -39,16 +43,22 @@ if (isset($_POST['btnLogin'])) {
             $roleName = $user['role_name']; // 'Professor' or 'Student'
             $roleId = (int)$user['role_id'];
 
-            $isProfessor = ($roleId === 2 || strcasecmp($roleName, 'Professor') === 0 || strcasecmp($roleName, 'Teacher') === 0);
+            $isProfessor = ($roleId === 2 || strcasecmp($roleName, 'Professor') === 0);
 
             // Double check role alignment
             if ($selectedRole === 'professor' && !$isProfessor) {
-                header("Location: ../index.html?error=" . urlencode("This account is registered as a Student. Please switch to the Student tab to sign in."));
+                header("Location: ../index.php?error=" . urlencode("This account is registered as a Student. Please switch to the Student tab to sign in."));
                 exit();
             }
             if ($selectedRole === 'student' && $isProfessor) {
-                header("Location: ../index.html?error=" . urlencode("This account is registered as a Professor. Please switch to the Professor tab to sign in."));
+                header("Location: ../index.php?error=" . urlencode("This account is registered as a Professor. Please switch to the Professor tab to sign in."));
                 exit();
+            }
+
+            if (isset($_POST['rememberMe'])) {
+                setcookie('remembered_email', $email, time() + (30 * 24 * 60 * 60), '/');
+            } else {
+                setcookie('remembered_email', '', time() - 3600, '/');
             }
 
             // 4. Store session data
@@ -66,7 +76,7 @@ if (isset($_POST['btnLogin'])) {
             }
             exit();
         } else {
-            header("Location: ../index.html?error=" . urlencode("Invalid password!"));
+            header("Location: ../index.php?error=" . urlencode("Invalid password!"));
             exit();
         }
     } else {
@@ -75,10 +85,10 @@ if (isset($_POST['btnLogin'])) {
         $checkPending->execute([$email]);
         if ($checkPending->fetch()) {
             $_SESSION['pending_otp_email'] = $email;
-            header("Location: ../otp.html?email=" . urlencode($email));
+            header("Location: ../otp.php?email=" . urlencode($email));
             exit();
         }
-        header("Location: ../index.html?error=" . urlencode("No account found with this email address."));
+        header("Location: ../index.php?error=" . urlencode("No account found with this email address."));
         exit();
     }
 }

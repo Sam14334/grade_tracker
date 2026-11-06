@@ -196,6 +196,10 @@ function hideAlert() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    if (document.getElementById('loginEmail').value.endsWith('@pup.edu.ph')) {
+        selectRole('professor');
+    }
+
     const params = new URLSearchParams(window.location.search);
     if (params.get('registered') === 'success') {
         showAlert('Account registered successfully! You can now log in.', 'success');

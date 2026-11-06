@@ -88,7 +88,7 @@ async function handleOtpVerification(e) {
         if (data.success) {
             showOtpAlert('Account verified successfully! Redirecting to login...', 'success');
             setTimeout(() => {
-                window.location.href = data.redirect || 'index.html?registered=success';
+                window.location.href = data.redirect || 'index.php?registered=success';
             }, 1200);
         } else {
             showOtpAlert(data.error || 'Invalid verification code.', 'error');
@@ -98,7 +98,7 @@ async function handleOtpVerification(e) {
                     input.disabled = true;
                 });
                 setTimeout(() => {
-                    window.location.href = 'index.html?error=' + encodeURIComponent(data.error);
+                    window.location.href = 'index.php?error=' + encodeURIComponent(data.error);
                 }, 3500);
             }
         }

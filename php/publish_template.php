@@ -1,14 +1,13 @@
 <?php
 // publish_template.php
 session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../index.php");
+    exit();
+}
 include 'db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || isset($_POST['btnPublishTemplate']))) {
-    if (!isset($_SESSION['user_id'])) {
-        header("Location: ../index.html");
-        exit();
-    }
-
     $userId = (int)$_SESSION['user_id'];
     $courseCode = trim($_POST['courseCode'] ?? '');
     $courseTitle = trim($_POST['courseTitle'] ?? '');
@@ -27,14 +26,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || is
         $componentNames = $_POST['component_name'] ?? $_POST['component_id'] ?? [];
         $weights = $_POST['weight'] ?? [];
 
-        $stmtComp = $conn->prepare("INSERT INTO template_components (template_id, component_name, weight) VALUES (?, ?, ?)");
+        $stmtComp = $conn->prepare("INSERT INTO template_components (template_id, component_name, weight, is_exam) VALUES (?, ?, ?, ?)");
 
-        for ($i = 0; $i < count($componentNames); $i++) {
-            $compName = trim((string)$componentNames[$i]);
+        foreach ($componentNames as $i => $componentName) {
+            $compName = trim((string)$componentName);
             $weight = (int)($weights[$i] ?? 0);
+            $isExam = isset($_POST['is_exam'][$i]) && $_POST['is_exam'][$i] === '1';
 
             if (!empty($compName)) {
-                $stmtComp->execute([$templateId, $compName, $weight]);
+                $stmtComp->execute([$templateId, $compName, $weight, $isExam ? 'true' : 'false']);
             }
         }
 
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['courseCode']) || is
         $stmtEnroll->execute([$userId, $templateId]);
 
         // Redirect back to dashboard with success
-        if (isset($_SESSION['role']) && (strcasecmp($_SESSION['role'], 'Professor') === 0 || strcasecmp($_SESSION['role'], 'Teacher') === 0)) {
+        if (isset($_SESSION['role']) && strcasecmp($_SESSION['role'], 'Professor') === 0) {
             header("Location: ../professor_dashboard.php?template=success&code=" . urlencode($classCode));
         } else {
             header("Location: ../student_dashboard.php?template=success&code=" . urlencode($classCode));
