@@ -1,5 +1,5 @@
 -- Supabase PostgreSQL Schema (Base Schema - No Data)
--- Matches the live public schema inspected on 2026-10-30.
+-- Includes the student-owned score table used by the calculator.
 -- For fresh setup; CREATE TABLE IF NOT EXISTS does not migrate existing tables.
 
 CREATE TABLE IF NOT EXISTS roles (
@@ -71,10 +71,22 @@ CREATE TABLE IF NOT EXISTS enrolled_courses (
 CREATE INDEX IF NOT EXISTS idx_enrolled_courses_user ON enrolled_courses(user_id);
 CREATE INDEX IF NOT EXISTS idx_enrolled_courses_template ON enrolled_courses(template_id);
 
--- The live database enables RLS on all six tables and defines no RLS policies.
+-- Already present in the live database; included here for fresh installations.
+CREATE TABLE IF NOT EXISTS student_component_scores (
+    score_id SERIAL PRIMARY KEY,
+    enrollment_id INT NOT NULL REFERENCES enrolled_courses(enrollment_id) ON DELETE CASCADE,
+    component_id INT NOT NULL REFERENCES template_components(id) ON DELETE CASCADE,
+    assessment_title VARCHAR(100) NOT NULL CHECK (length(trim(assessment_title)) > 0),
+    raw_score NUMERIC(9,2) NOT NULL CHECK (raw_score >= 0 AND raw_score <= total_items),
+    total_items INT NOT NULL CHECK (total_items > 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- The application uses its PHP session to scope queries to the signed-in user.
 ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE otp_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE grade_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE template_components ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrolled_courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE student_component_scores ENABLE ROW LEVEL SECURITY;

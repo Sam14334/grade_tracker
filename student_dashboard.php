@@ -10,6 +10,7 @@ if ((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
     exit();
 }
 include 'php/db.php';
+require_once 'php/grade_calculator.php';
 $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email']);
 $userInitial = strtoupper(substr($userName, 0, 1));
@@ -25,15 +26,28 @@ $enrolledStmt = $conn->prepare("
 $enrolledStmt->execute([$userId]);
 $dbEnrolled = [];
 
-$compStmt = $conn->prepare("SELECT component_name, weight FROM template_components WHERE template_id = ?");
+$compStmt = $conn->prepare("SELECT id, component_name, weight FROM template_components WHERE template_id = ? ORDER BY id");
+$scoreStmt = $conn->prepare("
+    SELECT scs.enrollment_id, scs.component_id, scs.raw_score, scs.total_items
+    FROM student_component_scores scs
+    JOIN enrolled_courses ec ON ec.enrollment_id = scs.enrollment_id
+    JOIN template_components tc ON tc.id = scs.component_id AND tc.template_id = ec.template_id
+    WHERE ec.user_id = ?
+");
+$scoreStmt->execute([$userId]);
+$scoresByEnrollment = [];
+while ($score = $scoreStmt->fetch()) {
+    $scoresByEnrollment[(int)$score['enrollment_id']][] = $score;
+}
 
 while ($row = $enrolledStmt->fetch()) {
     $tId = (int)$row['template_id'];
     $compStmt->execute([$tId]);
     $comps = [];
     while ($c = $compStmt->fetch()) {
-        $comps[] = ['name' => $c['component_name'], 'weight' => (int)$c['weight']];
+        $comps[] = ['id' => (int)$c['id'], 'name' => $c['component_name'], 'weight' => (int)$c['weight']];
     }
+    $result = calculateCourseGrade($comps, $scoresByEnrollment[(int)$row['enrollment_id']] ?? []);
     $dbEnrolled[] = [
         'id' => $tId,
         'templateId' => $tId,
@@ -42,7 +56,10 @@ while ($row = $enrolledStmt->fetch()) {
         'title' => $row['course_title'],
         'units' => (float)$row['course_unit'],
         'classCode' => $row['class_code'],
-        'components' => $comps
+        'components' => $comps,
+        'grade' => $result['grade'],
+        'percentage' => $result['percentage'],
+        'gradeStatus' => $result['status'],
     ];
 }
 ?>
@@ -186,7 +203,7 @@ while ($row = $enrolledStmt->fetch()) {
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="font-bold text-slate-800 text-lg">Input & Calculate Subject Grades</h3>
-                            <p class="text-xs text-stone-500">Your enrolled courses appear below. Enter grades (1.00 - 5.00) to calculate your GWA. Blank grades are excluded; entered grades last until you reload this page.</p>
+                            <p class="text-xs text-stone-500">Click a course to enter component scores. Saved scores calculate its grade and GWA automatically. Incomplete courses are excluded from GWA; target grades and manually added rows last until you reload.</p>
                         </div>
                         <button onclick="recalculateGradesAndStats()" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-2">
                             <i class="fa-solid fa-rotate"></i>

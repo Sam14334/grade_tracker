@@ -9,7 +9,9 @@ let studentGradesData = (window.studentDashboardData?.enrolledCourses ?? []).map
     enrollmentId: course.enrollmentId,
     subject: course.code,
     title: course.title,
-    grade: null,
+    grade: course.grade ?? null,
+    percentage: course.percentage ?? null,
+    gradeStatus: course.gradeStatus ?? 'Incomplete',
     target: 1.00,
     units: course.units
 }));
@@ -153,14 +155,14 @@ function recalculateGradesAndStats(showAlert = true) {
     if (gradedUnits === 0 || gradedUnits < totalUnits) {
         diagBox.className = "bg-stone-50 border-l-4 border-stone-400 p-4 rounded-2xl flex items-start space-x-3 shadow-sm";
         diagText.textContent = gradedUnits === 0
-            ? 'Enter grades for your enrolled courses to calculate your GWA.'
-            : `Current Estimated GWA: ${calculatedGWA}. Enter the remaining grades to check your target qualification.`;
+            ? 'Open an enrolled course and save its component scores to calculate your GWA.'
+            : `Current Estimated GWA: ${calculatedGWA}. Complete the remaining courses to check your target qualification.`;
     } else if (parseFloat(calculatedGWA) <= targetGwaGoal && !hasGradeBelow250) {
         diagBox.className = "bg-amber-50 border-l-4 border-amber-500 p-4 rounded-2xl flex items-start space-x-3 shadow-sm transition-all duration-300";
-        diagText.innerHTML = `Current Estimated GWA: <strong class="text-maroon-900">${calculatedGWA}</strong> (Qualifies for Target Goal GWA ≤ <strong>${targetGwaGoal.toFixed(2)}</strong>). All grades are 2.50 or higher.`;
+        diagText.innerHTML = `Current Estimated GWA: <strong class="text-maroon-900">${calculatedGWA}</strong> (Qualifies for Target Goal GWA ≤ <strong>${targetGwaGoal.toFixed(2)}</strong>). All grades are 2.50 or better.`;
     } else if (parseFloat(calculatedGWA) <= targetGwaGoal && hasGradeBelow250) {
         diagBox.className = "bg-orange-50 border-l-4 border-orange-500 p-4 rounded-2xl flex items-start space-x-3 shadow-sm transition-all duration-300";
-        diagText.innerHTML = `Current Estimated GWA: <strong class="text-orange-900">${calculatedGWA}</strong> (Meets target GWA but has grades below 2.50).`;
+        diagText.innerHTML = `Current Estimated GWA: <strong class="text-orange-900">${calculatedGWA}</strong> (Meets target GWA but has grades worse than 2.50).`;
     } else {
         diagBox.className = "bg-rose-50 border-l-4 border-rose-500 p-4 rounded-2xl flex items-start space-x-3 shadow-sm transition-all duration-300";
         diagText.innerHTML = `Current Estimated GWA: <strong class="text-rose-900">${calculatedGWA}</strong> (Needs improvement to achieve Target Goal GWA ≤ <strong>${targetGwaGoal.toFixed(2)}</strong>).`;
@@ -212,14 +214,26 @@ function renderGradesTable() {
 
     studentGradesData.forEach(item => {
         const tr = document.createElement('tr');
+        const courseUrl = `course_scores.php?enrollment_id=${item.enrollmentId}`;
+        if (item.enrollmentId > 0) {
+            tr.className = 'hover:bg-maroon-50/50 cursor-pointer transition';
+            tr.addEventListener('click', event => {
+                if (!event.target.closest('a, button, input')) window.location.href = courseUrl;
+            });
+        }
         tr.innerHTML = `
-            <td class="p-3 font-bold text-maroon-900">${escapeGradeText(item.subject)}</td>
+            <td class="p-3 font-bold text-maroon-900">${item.enrollmentId > 0
+                ? `<a href="${courseUrl}" class="underline underline-offset-4 decoration-maroon-200 hover:decoration-maroon-900">${escapeGradeText(item.subject)}</a>`
+                : escapeGradeText(item.subject)}</td>
             <td class="p-3 font-medium">${escapeGradeText(item.title)}</td>
             <td class="p-3 font-bold">${item.units.toFixed(1)}</td>
             <td class="p-3">
-                <input type="number" step="0.25" min="1.00" max="5.00" value="${item.grade === null ? '' : item.grade.toFixed(2)}" placeholder="Enter grade"
+                ${item.enrollmentId > 0 ? `
+                <span class="font-bold text-maroon-900">${item.grade === null ? escapeGradeText(item.gradeStatus) : item.grade.toFixed(2)}</span>
+                ${item.percentage === null ? '' : `<span class="block text-[10px] text-stone-500 mt-1">${item.percentage.toFixed(2)}%</span>`}
+                ` : `<input type="number" step="0.25" min="1.00" max="5.00" value="${item.grade === null ? '' : item.grade.toFixed(2)}" placeholder="Enter grade"
                        class="grade-input w-28 px-3 py-1.5 rounded-lg border border-stone-300 font-bold text-xs focus:border-maroon-800 outline-none"
-                       data-id="${item.id}" data-units="${item.units}">
+                       data-id="${item.id}" data-units="${item.units}">`}
             </td>
             <td class="p-3">
                 <input type="number" step="0.25" min="1.00" max="5.00" value="${item.target.toFixed(2)}" required
@@ -229,11 +243,11 @@ function renderGradesTable() {
             <td class="p-3">
                 <span class="${item.grade === null ? 'text-stone-500' : item.grade <= 2.50 ? 'text-emerald-700' : 'text-rose-700'} font-bold text-[11px]">
                     <i class="fa-solid ${item.grade === null ? 'fa-minus' : item.grade <= 2.50 ? 'fa-check-circle' : 'fa-triangle-exclamation'} mr-1"></i>
-                    ${item.grade === null ? 'Not entered' : item.grade <= 2.50 ? 'PL Valid (≤ 2.50)' : 'PL Ineligible (> 2.50)'}
+                    ${item.grade === null ? escapeGradeText(item.gradeStatus ?? 'Not entered') : item.grade <= 2.50 ? 'PL Valid (≤ 2.50)' : 'PL Ineligible (> 2.50)'}
                 </span>
             </td>
             <td class="p-3 text-center">
-                <button type="button" onclick="removeSubjectRow(${item.id})" class="text-rose-500 hover:text-rose-700 transition cursor-pointer">
+                <button type="button" aria-label="Remove ${escapeGradeText(item.subject)}" onclick="removeSubjectRow(${item.id})" class="text-rose-500 hover:text-rose-700 transition cursor-pointer">
                     <i class="fa-solid fa-trash-can"></i>
                 </button>
             </td>
@@ -304,7 +318,7 @@ function renderStudentTrendChart() {
     const options = {
         colors: ['#4a0415', '#3b82f6'],
         vAxis: {
-            title: 'PUP Grade Scale (1.00 - 3.00)',
+            title: 'PUP Grade Scale (1.00 - 5.00)',
             direction: -1,
             ticks: [1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00, 5.00]
         },
