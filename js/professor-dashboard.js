@@ -37,8 +37,8 @@ document.addEventListener("DOMContentLoaded", () => {
     calculateTotalWeight();
 });
 
-// Sidebar Tab Switcher
-function switchTab(tabId) {
+// Sidebar Tab Switcher (Exposed globally to window so HTML onclick works seamlessly)
+window.switchTab = function(tabId) {
     ['overview', 'standing', 'templates'].forEach(id => {
         const el = document.getElementById(`tab-content-${id}`);
         if (el) el.classList.add('hidden');
@@ -59,7 +59,7 @@ function switchTab(tabId) {
 }
 
 // Class Standing Filtering & Searching
-function filterLeaderboardByCourse(courseCode) {
+window.filterLeaderboardByCourse = function(courseCode) {
     currentCourseFilter = courseCode;
     const desc = document.getElementById('filterDescription');
     if (desc) {
@@ -72,7 +72,7 @@ function filterLeaderboardByCourse(courseCode) {
     renderLeaderboard();
 }
 
-function filterLeaderboardStatus(statusType) {
+window.filterLeaderboardStatus = function(statusType) {
     currentStatusFilter = statusType;
     ['ALL', 'ACCEL', 'TOP', 'RISK'].forEach(s => {
         const b = document.getElementById(`btn-status-${s.toLowerCase()}`);
@@ -87,7 +87,7 @@ function filterLeaderboardStatus(statusType) {
     renderLeaderboard();
 }
 
-function searchStudents(query) {
+window.searchStudents = function(query) {
     searchQuery = query.toLowerCase().trim();
     renderLeaderboard();
 }
@@ -193,7 +193,7 @@ function renderTemplatesList() {
     });
 }
 
-function addComponentRow() {
+window.addComponentRow = function() {
     const container = document.getElementById('componentContainer');
     const row = document.createElement('div');
     const index = nextComponentIndex++;
@@ -211,12 +211,12 @@ function addComponentRow() {
     calculateTotalWeight();
 }
 
-function removeRow(btn) {
+window.removeRow = function(btn) {
     btn.closest('.component-row').remove();
     calculateTotalWeight();
 }
 
-function calculateTotalWeight() {
+window.calculateTotalWeight = function() {
     const weights = document.querySelectorAll('.comp-weight');
     let total = 0;
     weights.forEach(w => total += parseFloat(w.value) || 0);
@@ -232,7 +232,7 @@ function calculateTotalWeight() {
     return total;
 }
 
-function validatePublishForm(e) {
+window.validatePublishForm = function(e) {
     const total = calculateTotalWeight();
     if (total !== 100) {
         alert(`Total weight must equal 100%. Current total is ${total}%.`);
@@ -257,12 +257,12 @@ function validatePublishForm(e) {
     return true;
 }
 
-function removeTemplate(id) {
+window.removeTemplate = function(id) {
     if (confirm("Remove this published syllabus from database?")) {
         window.location.href = `php/delete_template.php?id=${id}`;
     }
 }
 
-function logout() { 
+window.logout = function() { 
     window.location.href = 'php/logout.php'; 
 }
