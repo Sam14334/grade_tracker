@@ -15,7 +15,7 @@ $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email']);
 $userInitial = strtoupper(substr($userName, 0, 1));
 
-// Fetch published templates created by this professor[cite: 4]
+// fetch published templates created by this professor
 $templatesStmt = $conn->prepare("
     SELECT template_id, course_code, course_title, class_code 
     FROM grade_templates 
@@ -48,10 +48,11 @@ while ($row = $templatesStmt->fetch()) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Faculty Portal - Professor Dashboard</title>
+    <title>Faculty Portal - Grade Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
     <script>
         tailwind.config = {
             theme: {
@@ -75,9 +76,9 @@ while ($row = $templatesStmt->fetch()) {
     <header class="bg-maroon-900 text-white h-14 sticky top-0 z-40 shadow-md flex items-center justify-between px-6">
         <div class="flex items-center space-x-3">
             <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs border border-white/20">
-                <i class="fa-solid fa-graduation-cap"></i>
+                <i class="fa-solid fa-chalkboard-user"></i>
             </div>
-            <span class="font-extrabold text-base tracking-wide">Grade Tracker</span>
+            <span class="font-extrabold text-base tracking-wide">Faculty Portal</span>
         </div>
 
         <div class="flex items-center space-x-4">
@@ -128,7 +129,7 @@ while ($row = $templatesStmt->fetch()) {
         <!-- Main Workspace -->
         <main class="flex-1 p-6 sm:p-8 space-y-6 max-w-7xl">
 
-            <!-- 1. Faculty Overview Tab Content -->
+            <!-- Faculty Overview Tab Content -->
             <div id="tab-content-overview" class="hidden space-y-6">
                 <div class="flex items-center justify-between pb-2 border-b border-stone-300/60">
                     <div>
@@ -158,7 +159,7 @@ while ($row = $templatesStmt->fetch()) {
                 </div>
             </div>
 
-            <!-- 2. Class Standing Tab Content -->
+            <!-- Class Standing Tab Content -->
             <div id="tab-content-standing" class="hidden space-y-6">
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-stone-300/60">
                     <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Class Standing Overview</h2>
@@ -167,10 +168,6 @@ while ($row = $templatesStmt->fetch()) {
                             <i class="fa-solid fa-chart-line text-xs"></i>
                             <span>Acceleration Insights Active</span>
                         </span>
-                        <span class="px-3 py-1 bg-white text-stone-700 border border-stone-300 rounded-full text-xs font-bold flex items-center space-x-1.5 shadow-sm">
-                            <i class="fa-solid fa-filter text-xs text-stone-400"></i>
-                            <span>Top Accelerating Delta</span>
-                        </span>
                     </div>
                 </div>
 
@@ -178,7 +175,7 @@ while ($row = $templatesStmt->fetch()) {
                 <div class="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div class="flex items-center space-x-3 w-full sm:w-auto">
                         <span class="text-xs font-bold uppercase text-stone-500">Course:</span>
-                        <select id="courseFilterSelect" onchange="filterByCourse()" class="px-4 py-2 rounded-xl border border-stone-300 bg-white text-xs font-bold text-slate-800 outline-none focus:border-maroon-800 cursor-pointer w-full sm:w-80 shadow-sm">
+                        <select id="courseFilterSelect" onchange="filterLeaderboardByCourse(this.value)" class="px-4 py-2 rounded-xl border border-stone-300 bg-white text-xs font-bold text-slate-800 outline-none focus:border-maroon-800 cursor-pointer w-full sm:w-80">
                             <option value="ALL">All Enrolled Courses (Overall Standing) — 142 Students</option>
                             <option value="CS-301">CS-301 Computer Science — 48 Students</option>
                             <option value="BIO-105">BIO-105 General Biology — 52 Students</option>
@@ -187,7 +184,7 @@ while ($row = $templatesStmt->fetch()) {
                     </div>
                     <div class="text-xs text-stone-500 flex items-center space-x-2">
                         <i class="fa-solid fa-book-open text-stone-400"></i>
-                        <span id="filteredViewText">Filtered View: <strong>Currently showing aggregated standings across all active classes</strong></span>
+                        <span id="filterDescription">Filtered View: <strong>Currently showing aggregated standings across all active classes</strong></span>
                     </div>
                 </div>
 
@@ -196,15 +193,15 @@ while ($row = $templatesStmt->fetch()) {
                     <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-1">
                         <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">Top Rank (#1)</span>
                         <div class="flex items-baseline space-x-2">
-                            <span class="text-2xl font-black text-slate-900" id="metricTopGrade">96.5%</span>
+                            <span class="text-2xl font-black text-slate-900">96.5%</span>
                         </div>
-                        <p class="text-xs text-stone-600 font-medium" id="metricTopStudent">Jane Doe <span class="text-[10px] text-stone-400">(CS-301)</span></p>
+                        <p class="text-xs text-stone-600 font-medium">Jane Doe <span class="text-[10px] text-stone-400">(CS-301)</span></p>
                     </div>
 
                     <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-1">
                         <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">Class Average</span>
                         <div class="flex items-baseline space-x-2">
-                            <span class="text-2xl font-black text-slate-900" id="metricClassAvg">85.4%</span>
+                            <span class="text-2xl font-black text-slate-900">85.4%</span>
                             <span class="text-[11px] font-bold text-emerald-700">+2.1% from Midterm</span>
                         </div>
                         <p class="text-xs text-stone-600 font-medium">Overall Class Performance</p>
@@ -213,58 +210,17 @@ while ($row = $templatesStmt->fetch()) {
                     <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-1">
                         <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">Total Enrolled</span>
                         <div class="flex items-baseline space-x-2">
-                            <span class="text-2xl font-black text-slate-900" id="metricTotalEnrolled">142</span>
+                            <span class="text-2xl font-black text-slate-900">142</span>
                         </div>
-                        <p class="text-xs text-stone-600 font-medium" id="metricCourseCount">Across 3 Courses</p>
+                        <p class="text-xs text-stone-600 font-medium">Across 3 Courses</p>
                     </div>
 
                     <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-1">
                         <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">At Risk (&lt;75%)</span>
                         <div class="flex items-baseline space-x-2">
-                            <span class="text-2xl font-black text-rose-700" id="metricAtRiskCount">2 Students</span>
+                            <span class="text-2xl font-black text-rose-700">2 Students</span>
                         </div>
                         <p class="text-xs text-rose-600 font-bold">Requires Intervention</p>
-                    </div>
-                </div>
-
-                <!-- Velocity & Acceleration Bar -->
-                <div class="bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-4">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 pb-3">
-                        <div class="flex items-center space-x-2">
-                            <i class="fa-solid fa-gauge-high text-maroon-800"></i>
-                            <h4 class="font-bold text-slate-800 text-sm">Course Acceleration & Velocity Index</h4>
-                            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Monthly Surge</span>
-                        </div>
-                        <span class="text-xs text-stone-400 font-medium">Updated after Midterm Exam Cycle</span>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                        <div class="p-4 bg-stone-50 rounded-2xl border border-stone-200 flex justify-between items-center">
-                            <div>
-                                <span class="text-[10px] font-bold text-stone-400 block uppercase">CS-301 Computer Science</span>
-                                <span class="font-bold text-slate-900 text-sm">Avg 87.3%</span>
-                                <span class="block text-[10px] text-stone-500">48 Enrolled</span>
-                            </div>
-                            <span class="font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 text-xs">+4.8% <small class="block text-[9px] font-normal">High Velocity</small></span>
-                        </div>
-
-                        <div class="p-4 bg-stone-50 rounded-2xl border border-stone-200 flex justify-between items-center">
-                            <div>
-                                <span class="text-[10px] font-bold text-stone-400 block uppercase">BIO-105 General Biology</span>
-                                <span class="font-bold text-slate-900 text-sm">Avg 86.4%</span>
-                                <span class="block text-[10px] text-stone-500">52 Enrolled</span>
-                            </div>
-                            <span class="font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 text-xs">+2.1% <small class="block text-[9px] font-normal">Steady Climb</small></span>
-                        </div>
-
-                        <div class="p-4 bg-stone-50 rounded-2xl border border-stone-200 flex justify-between items-center">
-                            <div>
-                                <span class="text-[10px] font-bold text-stone-400 block uppercase">ENG-210 English Literature</span>
-                                <span class="font-bold text-slate-900 text-sm">Avg 80.6%</span>
-                                <span class="block text-[10px] text-stone-500">42 Enrolled</span>
-                            </div>
-                            <span class="font-bold text-rose-700 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200 text-xs">-0.6% <small class="block text-[9px] font-normal">Velocity Stall</small></span>
-                        </div>
                     </div>
                 </div>
 
@@ -277,13 +233,13 @@ while ($row = $templatesStmt->fetch()) {
                         </h3>
 
                         <div class="flex flex-wrap items-center gap-2">
-                            <button type="button" onclick="setCategoryFilter('ALL', this)" class="cat-btn px-3 py-1.5 bg-maroon-900 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer transition">All Students</button>
-                            <button type="button" onclick="setCategoryFilter('ACCELERATING', this)" class="cat-btn px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition cursor-pointer">Accelerating Students</button>
-                            <button type="button" onclick="setCategoryFilter('TOP', this)" class="cat-btn px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition cursor-pointer">Top Performers</button>
-                            <button type="button" onclick="setCategoryFilter('RISK', this)" class="cat-btn px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition cursor-pointer">At Risk (&lt;75%)</button>
+                            <button type="button" onclick="filterLeaderboardStatus('ALL')" id="btn-status-all" class="px-3 py-1.5 bg-maroon-900 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer">All Students</button>
+                            <button type="button" onclick="filterLeaderboardStatus('ACCEL')" id="btn-status-accel" class="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition cursor-pointer">Accelerating Students</button>
+                            <button type="button" onclick="filterLeaderboardStatus('TOP')" id="btn-status-top" class="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition cursor-pointer">Top Performers</button>
+                            <button type="button" onclick="filterLeaderboardStatus('RISK')" id="btn-status-risk" class="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition cursor-pointer">At Risk (&lt;75%)</button>
                             
                             <div class="relative ml-auto">
-                                <input type="text" id="searchInput" oninput="renderTable()" placeholder="Search student..." class="px-3 py-1.5 pl-8 rounded-xl border border-stone-300 text-xs outline-none focus:border-maroon-800 w-48 shadow-sm">
+                                <input type="text" id="studentSearchInput" oninput="searchStudents(this.value)" placeholder="Search student..." class="px-3 py-1.5 pl-8 rounded-xl border border-stone-300 text-xs outline-none focus:border-maroon-800 w-48">
                                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-stone-400"></i>
                             </div>
                         </div>
@@ -299,15 +255,15 @@ while ($row = $templatesStmt->fetch()) {
                                     <th class="p-3">Course</th>
                                     <th class="p-3">Overall Grade</th>
                                     <th class="p-3">Velocity / Accel</th>
-                                    <th class="p-3 text-center">Quizzes (25%)</th>
-                                    <th class="p-3 text-center">Midterm (25%)</th>
-                                    <th class="p-3 text-center">Project (20%)</th>
-                                    <th class="p-3 text-center">Final Exam (30%)</th>
+                                    <th class="p-3 text-center">Quizzes</th>
+                                    <th class="p-3 text-center">Midterm</th>
+                                    <th class="p-3 text-center">Project</th>
+                                    <th class="p-3 text-center">Final Exam</th>
                                     <th class="p-3">Status</th>
                                     <th class="p-3 text-right">Action</th>
                                 </tr>
                             </thead>
-                            <tbody id="leaderboardTableBody" class="divide-y divide-stone-200 text-slate-700 font-medium">
+                            <tbody class="divide-y divide-stone-200 text-slate-700 font-medium" id="leaderboardTableBody">
                                 <!-- Populated dynamically by JS -->
                             </tbody>
                         </table>
@@ -315,15 +271,15 @@ while ($row = $templatesStmt->fetch()) {
                 </div>
             </div>
 
-            <!-- 3. Course Templates Tab Content -->
-            <div id="tab-content-templates" class="hidden space-y-6">
+            <!-- Course Templates Tab Content -->
+            <div id="tab-content-templates" class="space-y-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-stone-300/60">
                     <div>
                         <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Professor Syllabus Templates</h2>
                         <p class="text-xs font-semibold text-stone-500 mt-0.5">Design course evaluation components and generate enrollment sync codes for students.</p>
                     </div>
                     <div class="text-left sm:text-right">
-                        <span class="text-xs sm:text-sm font-semibold text-stone-500">Oct 2, 2026</span>
+                        <span class="text-xs sm:text-sm font-semibold text-stone-500">Nov 6, 2026</span>
                     </div>
                 </div>
 
@@ -339,7 +295,7 @@ while ($row = $templatesStmt->fetch()) {
                             <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200" id="weightTotalBadge">Total Weight: 100%</span>
                         </div>
 
-                        <form id="publishTemplateForm" action="php/publish_template.php" method="POST" class="space-y-4 text-xs">
+                        <form id="publishTemplateForm" action="php/publish_template.php" method="POST" onsubmit="return validatePublishForm(event)" class="space-y-4 text-xs">
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
                                     <label class="block font-bold uppercase text-stone-600 mb-1">Course Code</label>
@@ -355,34 +311,45 @@ while ($row = $templatesStmt->fetch()) {
                                 <label class="block font-bold uppercase text-stone-600">Grading System Components & Percentage Weights</label>
 
                                 <div class="space-y-2" id="componentContainer">
-                                    <div class="flex items-center space-x-2 component-row">
-                                        <input type="text" name="component_name[0]" value="Quizzes & Seatwork" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <input type="number" name="weight[0]" value="30" min="1" max="100" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                    <div class="flex flex-wrap items-center gap-2 component-row">
+                                        <input type="text" name="component_name[0]" value="Quizzes & Seatwork" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
+                                            <input type="checkbox" name="is_exam[0]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                                        </label>
+                                        <input type="number" name="weight[0]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
-                                    <div class="flex items-center space-x-2 component-row">
-                                        <input type="text" name="component_name[1]" value="Midterm Examination" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <input type="number" name="weight[1]" value="30" min="1" max="100" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+
+                                    <div class="flex flex-wrap items-center gap-2 component-row">
+                                        <input type="text" name="component_name[1]" value="Midterm Examination" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
+                                            <input type="checkbox" name="is_exam[1]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                                        </label>
+                                        <input type="number" name="weight[1]" value="30" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
-                                    <div class="flex items-center space-x-2 component-row">
-                                        <input type="text" name="component_name[2]" value="Final Project & Exam" required class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-                                        <input type="number" name="weight[2]" value="40" min="1" max="100" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+
+                                    <div class="flex flex-wrap items-center gap-2 component-row">
+                                        <input type="text" name="component_name[2]" value="Final Project & Exam" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                        <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
+                                            <input type="checkbox" name="is_exam[2]" value="1" class="w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                                        </label>
+                                        <input type="number" name="weight[2]" value="40" min="1" max="100" onchange="calculateTotalWeight()" required class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                         <span class="font-bold text-stone-400">%</span>
-                                        <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
+                                        <button type="button" onclick="removeRow(this)" class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>
                                 </div>
 
-                                <button type="button" id="addRowBtn" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 pt-1 cursor-pointer">
+                                <button type="button" onclick="addComponentRow()" class="text-xs font-bold text-maroon-800 hover:text-maroon-900 transition flex items-center space-x-1 pt-1 cursor-pointer">
                                     <i class="fa-solid fa-circle-plus"></i>
                                     <span>Add Assessment Criterion</span>
                                 </button>
                             </div>
 
                             <div class="pt-4 border-t border-stone-200">
-                                <button type="button" id="publishBtn" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center cursor-pointer">
+                                <button type="submit" name="btnPublishTemplate" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center cursor-pointer">
                                     Publish Syllabus & Generate Class Code
                                 </button>
                             </div>
@@ -401,12 +368,10 @@ while ($row = $templatesStmt->fetch()) {
         </main>
     </div>
 
-    <!-- Pass database templates into JavaScript -->
+    <!-- Pass Database Context to JS & Include External Script -->
     <script>
-        let enrolledTemplates = <?php echo json_encode($publishedTemplates); ?>;
+        window.publishedTemplatesData = <?php echo json_encode($publishedTemplates); ?>;
     </script>
-    <!-- Include your custom JS file -->
-    <script src="js/professor-dashboard.js"></script>
-    <script src="js/professor-templates.js"></script>
+    <script src="js/professor_dashboard.js"></script>
 </body>
 </html>
