@@ -185,7 +185,7 @@ function scoreText($value): string {
                                     <input type="number" name="entries[<?php echo $componentId; ?>][<?php echo $index; ?>][total_items]" min="1" max="2147483647" step="1" value="<?php echo scoreText($entry['total_items']); ?>" placeholder="100"
                                         class="entry-max mt-1 block w-full px-3 py-2.5 rounded-xl border border-stone-300 text-xs text-slate-800 outline-none focus:border-maroon-800">
                                 </label>
-                                <button type="button" class="remove-entry text-xs font-semibold text-rose-600 hover:underline py-2.5 sm:text-right">Remove</button>
+                                <button type="button" title="Clear score and max score" class="remove-entry text-xs font-semibold text-rose-600 hover:underline py-2.5 sm:text-right">Remove</button>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -267,7 +267,7 @@ function scoreText($value): string {
             <label class="text-xs font-semibold text-stone-600">Max score
                 <input type="number" data-field="total_items" min="1" max="2147483647" step="1" placeholder="100" class="entry-max mt-1 block w-full px-3 py-2.5 rounded-xl border border-stone-300 text-xs outline-none focus:border-maroon-800">
             </label>
-            <button type="button" class="remove-entry text-xs font-semibold text-rose-600 hover:underline py-2.5 sm:text-right">Remove</button>
+            <button type="button" title="Clear score and max score" class="remove-entry text-xs font-semibold text-rose-600 hover:underline py-2.5 sm:text-right">Remove</button>
         </div>
     </template>
     <script>

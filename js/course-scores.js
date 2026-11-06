@@ -54,10 +54,6 @@ function updateScorePreview() {
         component.querySelector('.component-summary').textContent = maximum > 0
             ? `${earned.toFixed(2)} / ${maximum} · ${(earned / maximum * 100).toFixed(2)}% · ${(earned / maximum * weight).toFixed(2)} weighted points`
             : isExam ? 'Awaiting exam score' : 'No scored entries yet';
-        rows.forEach(row => {
-            row.querySelector('.remove-entry').disabled = rows.length === 1;
-            row.querySelector('.remove-entry').classList.toggle('opacity-40', rows.length === 1);
-        });
     });
 
     const periods = {};
@@ -186,9 +182,9 @@ scoreForm.addEventListener('click', event => {
         component.querySelector('.score-entries').appendChild(row);
         markScoresChanged();
     } else if (remove) {
-        const component = remove.closest('.score-component');
-        if (component.querySelectorAll('.score-entry').length <= 1) return;
-        remove.closest('.score-entry').remove();
+        const row = remove.closest('.score-entry');
+        row.querySelector('.entry-score').value = '';
+        row.querySelector('.entry-max').value = '';
         markScoresChanged();
     }
 });
