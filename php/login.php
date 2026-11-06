@@ -55,6 +55,12 @@ if (isset($_POST['btnLogin'])) {
                 exit();
             }
 
+            if (isset($_POST['rememberMe'])) {
+                setcookie('remembered_email', $email, time() + (30 * 24 * 60 * 60), '/');
+            } else {
+                setcookie('remembered_email', '', time() - 3600, '/');
+            }
+
             // 4. Store session data
             $_SESSION['user_id'] = $user['user_id'];
             $_SESSION['email'] = $user['email'];

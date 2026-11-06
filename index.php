@@ -199,6 +199,7 @@ if (isset($_SESSION['user_id'])) {
                   type="email"
                   name="loginEmail"
                   id="loginEmail"
+                  value="<?php echo isset($_COOKIE['remembered_email']) ? htmlspecialchars($_COOKIE['remembered_email'], ENT_QUOTES, 'UTF-8') : ''; ?>"
                   required
                   class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 outline-none transition text-sm text-slate-800 font-medium placeholder-slate-400"
                   placeholder="e.g. name@iskolarngbayan.pup.edu.ph"
@@ -248,6 +249,8 @@ if (isset($_SESSION['user_id'])) {
                 <input
                   type="checkbox"
                   id="rememberMe"
+                  name="rememberMe"
+                  <?php if (isset($_COOKIE['remembered_email'])) echo 'checked'; ?>
                   class="w-4 h-4 rounded border-slate-300 text-maroon-800 focus:ring-maroon-700"
                 />
                 <span class="text-xs text-slate-600 font-medium"
