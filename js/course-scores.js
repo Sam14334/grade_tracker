@@ -109,7 +109,7 @@ function updateExamPrediction(components) {
     }
     select.disabled = exams.length === 0;
     maxInput.disabled = pending.length === 0;
-    note.textContent = 'Targets your overall course grade using 50% Midterms and 50% Finals. Predictions are not saved as scores.';
+    note.textContent = 'Uses only the selected exam’s period and the target set in Grade Entry. Predictions are not saved as scores.';
     if (!exams.length) {
         result.textContent = 'No exams are marked in this course template.';
         return;
@@ -123,16 +123,16 @@ function updateExamPrediction(components) {
         result.textContent = 'Select a pending examination.';
         return;
     }
-    const periods = Object.keys(periodLabels).map(period =>
-        calculatePeriodPreview(components.filter(component => component.period === period)));
-    if (periods.some(period => period.status === 'Invalid weights' || period.status === 'Check entries')) {
-        result.textContent = 'Correct the weights or score entries in both periods before predicting.';
+    const periodComponents = components.filter(component => component.period === selected.period);
+    const period = calculatePeriodPreview(periodComponents);
+    if (period.status === 'Invalid weights' || period.status === 'Check entries') {
+        result.textContent = `Correct the ${periodLabels[selected.period]} weights or score entries before predicting.`;
         return;
     }
-    const others = components.filter(component => component.id !== selected.id);
+    const others = periodComponents.filter(component => component.id !== selected.id);
     const missing = others.filter(component => !component.isExam && component.maximum === 0);
     if (missing.length) {
-        result.textContent = 'Complete the non-exam coursework in both periods first.';
+        result.textContent = `Complete the ${periodLabels[selected.period]} non-exam coursework first.`;
         note.textContent = `Enter at least one scored entry for: ${missing.map(component => `${periodLabels[component.period]} · ${component.name}`).join(', ')}.`;
         return;
     }
@@ -151,17 +151,12 @@ function updateExamPrediction(components) {
     }
     const maximum = Number(maxInput.value);
     const otherPoints = others.reduce((sum, component) => sum +
-        (component.maximum > 0 ? component.earned / component.maximum * component.weight * 0.5 : 0), 0);
-    const overallExamWeight = selected.weight * 0.5;
-    const required = Math.max(0, Math.ceil(Number(((target[0] - otherPoints) / overallExamWeight * maximum).toFixed(10))));
-    const otherPending = others.filter(component => component.isExam && component.maximum === 0);
-    const pendingNote = otherPending.length
-        ? ` Pending exams (${otherPending.map(component => `${periodLabels[component.period]} · ${component.name}`).join(', ')}) add no points yet. This prediction may change when they are scored.`
-        : '';
+        (component.maximum > 0 ? component.earned / component.maximum * component.weight : 0), 0);
+    const required = Math.max(0, Math.ceil(Number(((target[0] - otherPoints) / selected.weight * maximum).toFixed(10))));
     if (required > maximum) result.textContent = 'Target unreachable with this exam';
-    else if (required === 0) result.textContent = 'Overall target already secured';
+    else if (required === 0) result.textContent = 'Target already secured for this period';
     else result.textContent = `You need at least ${required} / ${maximum} on ${selected.name}.`;
-    note.textContent = `Overall target: ${window.courseTargetGrade.toFixed(2)} or better (${target[0]}%). Required score: ${required} / ${maximum}, rounded up, using 50% Midterms and 50% Finals with currently recorded scores.${pendingNote}`;
+    note.textContent = `${periodLabels[selected.period]} target: ${window.courseTargetGrade.toFixed(2)} or better (${target[0]}%). Required score: ${required} / ${maximum}, rounded up. Only ${periodLabels[selected.period]} coursework is used, even when the other period has scores.`;
 }
 
 document.getElementById('predictorExam').addEventListener('change', () => {

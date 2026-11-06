@@ -204,9 +204,9 @@ function scoreText($value): string {
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h2 class="font-bold text-slate-900">Exam predictor</h2>
-                    <p class="text-xs text-stone-500 mt-1">Find the exam score needed for your overall course grade: 50% Midterms + 50% Finals.</p>
+                    <p class="text-xs text-stone-500 mt-1">Midterm predictions use Midterm scores only. Final predictions use Final scores only.</p>
                 </div>
-                <a href="student_dashboard.php#grades" class="text-xs font-bold text-maroon-800 hover:underline">Overall target: <?php echo number_format((float)$course['target_grade'], 2); ?></a>
+                <a href="student_dashboard.php#grades" class="text-xs font-bold text-maroon-800 hover:underline">Target for each period: <?php echo number_format((float)$course['target_grade'], 2); ?></a>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label class="text-xs font-semibold text-stone-600" for="predictorExam">Exam
@@ -227,7 +227,7 @@ function scoreText($value): string {
             </div>
             <div class="bg-stone-50 border border-stone-200 p-4 rounded-2xl space-y-1">
                 <p id="examPredictionResult" class="font-bold text-maroon-900 text-sm" aria-live="polite">Select the examination and enter its maximum score.</p>
-                <p id="examPredictionNote" class="text-xs text-stone-500">Uses both periods and the overall target set in Grade Entry. Predictions are not saved as scores.</p>
+                <p id="examPredictionNote" class="text-xs text-stone-500">Uses the selected period’s 100% weights and the saved target grade. Predictions are not saved as scores.</p>
             </div>
         </section>
 
