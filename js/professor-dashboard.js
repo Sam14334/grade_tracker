@@ -30,14 +30,14 @@ document.addEventListener("DOMContentLoaded", () => {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
     
-    // Default active tab & views
+    // Set default active tab & render views
     switchTab('templates');
     renderTemplatesList();
     renderLeaderboard();
     calculateTotalWeight();
 });
 
-// Sidebar Tab Switcher (Exposed globally)
+// Sidebar Tab Switcher (Exposed globally to window so HTML onclick works seamlessly)
 window.switchTab = function(tabId) {
     ['overview', 'standing', 'templates'].forEach(id => {
         const el = document.getElementById(`tab-content-${id}`);
