@@ -1,8 +1,18 @@
-google.charts.load('current', { 'packages': ['corechart'] });
-google.charts.setOnLoadCallback(() => renderStudentTrendChart());
+if (window.google?.charts) {
+    google.charts.load('current', { 'packages': ['corechart'] });
+    google.charts.setOnLoadCallback(() => renderStudentTrendChart());
+}
 
-// Load saved target GWA goal or default to 1.45
-let targetGwaGoal = parseFloat(localStorage.getItem('targetGwaGoal')) || 1.45;
+// Keep each student's own goal separate on shared browsers; no goal is assumed.
+const gwaGoalStorageKey = `targetGwaGoal:${window.studentDashboardData.userId}`;
+let targetGwaGoal = null;
+try {
+    const savedGoal = localStorage.getItem(gwaGoalStorageKey);
+    const parsedGoal = savedGoal === null || savedGoal.trim() === '' ? NaN : Number(savedGoal);
+    if (Number.isFinite(parsedGoal) && parsedGoal >= 1 && parsedGoal <= 5) targetGwaGoal = parsedGoal;
+} catch {
+    // The dashboard still works when browser storage is disabled.
+}
 
 let studentGradesData = (window.studentDashboardData?.enrolledCourses ?? []).map(course => ({
     id: course.templateId,
@@ -12,75 +22,24 @@ let studentGradesData = (window.studentDashboardData?.enrolledCourses ?? []).map
     grade: course.grade ?? null,
     percentage: course.percentage ?? null,
     gradeStatus: course.gradeStatus ?? 'Incomplete',
-    target: course.target ?? 1.00,
+    target: course.target,
     units: course.units
 }));
 
-let enrolledTemplates = [
-    {
-        id: 1,
-        code: 'CS-301',
-        title: 'Software Engineering',
-        classCode: 'CS301-SEC1',
-        components: [
-            { name: 'Quizzes & Seatwork', weight: 30 },
-            { name: 'Midterm Examination', weight: 30 },
-            { name: 'Final Project & Exam', weight: 40 }
-        ]
-    }
-];
-
 document.addEventListener("DOMContentLoaded", () => {
-    const selectElement = document.getElementById('thresholdSettingInput');
-    if (selectElement) {
-        selectElement.value = targetGwaGoal.toFixed(2);
-    }
+    const goalInput = document.getElementById('thresholdSettingInput');
+    if (targetGwaGoal !== null) goalInput.value = targetGwaGoal.toFixed(2);
+    document.getElementById('gwaGoalForm').addEventListener('submit', event => {
+        event.preventDefault();
+        saveSettings();
+    });
 
     renderGradesTable();
-    renderTemplatesList();
     recalculateGradesAndStats(false);
 
     if (['#templates', '#grades'].includes(window.location.hash)) {
         switchTab(window.location.hash.slice(1));
     }
-
-    // The PHP dashboard uses inline handlers and submits enrollment to PHP.
-    if (window.studentDashboardData) return;
-
-    // Sidebar Nav Event Listeners
-    document.getElementById('nav-dashboard').addEventListener('click', () => switchTab('dashboard'));
-    document.getElementById('nav-grades').addEventListener('click', () => switchTab('grades'));
-    document.getElementById('nav-templates').addEventListener('click', () => switchTab('templates'));
-    document.getElementById('nav-settings').addEventListener('click', () => switchTab('settings'));
-
-
-    // Grades table actions
-    document.getElementById('updateStatsBtn').addEventListener('click', () => recalculateGradesAndStats(true));
-    document.getElementById('addCourseRowBtn').addEventListener('click', addSubjectRow);
-
-    // Templates actions
-    document.getElementById('enrollSyncBtn').addEventListener('click', enrollTemplateCode);
-    document.getElementById('addComponentBtn').addEventListener('click', addComponentRow);
-    document.getElementById('publishTemplateBtn').addEventListener('click', publishTemplate);
-
-
-    // Settings actions
-    document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
-
-    // Component weight live calculation event delegation
-    document.getElementById('componentContainer').addEventListener('input', (e) => {
-        if (e.target.classList.contains('comp-weight')) {
-            calculateTotalWeight();
-        }
-    });
-
-    document.getElementById('componentContainer').addEventListener('click', (e) => {
-        const deleteBtn = e.target.closest('.remove-row-btn');
-        if (deleteBtn) {
-            deleteBtn.closest('.component-row').remove();
-            calculateTotalWeight();
-        }
-    });
 });
 
 function switchTab(tabId) {
@@ -143,20 +102,23 @@ function recalculateGradesAndStats(showAlert = true) {
     document.getElementById('totalUnitsDisplay').innerText = totalUnits.toFixed(1);
 
     document.querySelectorAll('.targetGwaSpan').forEach(span => {
-        span.innerText = targetGwaGoal.toFixed(2);
+        span.innerText = targetGwaGoal === null ? '—' : targetGwaGoal.toFixed(2);
     });
 
     const diagBox = document.getElementById('ruleDiagnosticBox');
     const diagText = document.getElementById('ruleDiagnosticText');
     const badge = document.getElementById('bannerTargetBadge');
 
-    badge.innerText = `Target Goal: GWA ≤ ${targetGwaGoal.toFixed(2)}`;
+    badge.innerText = targetGwaGoal === null ? 'No GWA target set' : `Target Goal: GWA ≤ ${targetGwaGoal.toFixed(2)}`;
 
     if (gradedUnits === 0 || gradedUnits < totalUnits) {
         diagBox.className = "bg-stone-50 border-l-4 border-stone-400 p-4 rounded-2xl flex items-start space-x-3 shadow-sm";
         diagText.textContent = gradedUnits === 0
             ? 'Open an enrolled course and save its component scores to calculate your GWA.'
             : `Current Estimated GWA: ${calculatedGWA}. Complete the remaining courses to check your target qualification.`;
+    } else if (targetGwaGoal === null) {
+        diagBox.className = "bg-stone-50 border-l-4 border-stone-400 p-4 rounded-2xl flex items-start space-x-3 shadow-sm";
+        diagText.textContent = `Current Estimated GWA: ${calculatedGWA}. Set your GWA target to check your qualification.`;
     } else if (parseFloat(calculatedGWA) <= targetGwaGoal && !hasGradeBelow250) {
         diagBox.className = "bg-amber-50 border-l-4 border-amber-500 p-4 rounded-2xl flex items-start space-x-3 shadow-sm transition-all duration-300";
         diagText.innerHTML = `Current Estimated GWA: <strong class="text-maroon-900">${calculatedGWA}</strong> (Qualifies for Target Goal GWA ≤ <strong>${targetGwaGoal.toFixed(2)}</strong>). All grades are 2.50 or better.`;
@@ -181,15 +143,24 @@ function saveSettings() {
     const selectElement = document.getElementById('thresholdSettingInput');
     if (!selectElement) return;
 
-    const selectedVal = parseFloat(selectElement.value) || 1.45;
+    if (!selectElement.reportValidity()) return;
+    const selectedVal = Number(selectElement.value);
+    if (!Number.isFinite(selectedVal) || selectedVal < 1 || selectedVal > 5) return;
 
     targetGwaGoal = selectedVal;
-    localStorage.setItem('targetGwaGoal', selectedVal.toString());
+    let stored = false;
+    try {
+        localStorage.setItem(gwaGoalStorageKey, selectedVal.toString());
+        stored = true;
+    } catch {
+        // Retain the selected goal for this page even without browser storage.
+    }
 
     recalculateGradesAndStats(false);
 
     const statusMsg = document.getElementById('saveStatusMsg');
     if (statusMsg) {
+        statusMsg.textContent = stored ? 'Saved on this browser.' : 'Applied for this page; browser storage is unavailable.';
         statusMsg.classList.remove('hidden');
         setTimeout(() => {
             statusMsg.classList.add('hidden');
@@ -242,7 +213,7 @@ function renderGradesTable() {
                 <select name="target_grade" required aria-label="Target grade for ${escapeGradeText(item.subject)}"
                     ${item.enrollmentId > 0 ? 'onchange="this.form.requestSubmit()"' : ''}
                     class="target-grade-input w-28 px-3 py-1.5 rounded-lg border border-stone-300 font-bold text-xs focus:border-maroon-800 outline-none" data-id="${item.id}">
-                    ${(window.studentDashboardData?.targetGrades ?? [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3]).map(grade =>
+                    ${(window.studentDashboardData.targetGrades).map(grade =>
                         `<option value="${grade.toFixed(2)}" ${grade === item.target ? 'selected' : ''}>${grade.toFixed(2)}</option>`).join('')}
                 </select>
                 ${item.enrollmentId > 0 ? '</form>' : ''}
@@ -263,56 +234,8 @@ function renderGradesTable() {
     });
 }
 
-function renderTemplatesList() {
-    if (window.studentDashboardData) return;
-
-    const container = document.getElementById('publishedTemplatesList');
-    container.innerHTML = '';
-
-    if (enrolledTemplates.length === 0) {
-        container.innerHTML = `<p class="text-xs text-stone-400 italic">No enrolled templates found.</p>`;
-        return;
-    }
-
-    enrolledTemplates.forEach(tpl => {
-        const card = document.createElement('div');
-        card.className = "bg-white p-5 rounded-3xl border border-stone-200 shadow-sm space-y-3";
-
-        let componentsHtml = tpl.components.map(c => `
-            <div class="flex justify-between text-stone-600">
-                <span>${c.name}:</span>
-                <span class="font-bold text-slate-800">${c.weight}%</span>
-            </div>
-        `).join('');
-
-        card.innerHTML = `
-            <div class="flex items-start justify-between">
-                <div>
-                    <span class="text-[10px] font-bold text-maroon-800 bg-maroon-50 px-2 py-0.5 rounded-full border border-maroon-200">ACTIVE SYNC</span>
-                    <h4 class="font-extrabold text-slate-900 text-base mt-1">${tpl.code}</h4>
-                    <p class="text-xs text-stone-500 font-medium">${tpl.title}</p>
-                </div>
-                <div class="text-right flex items-center space-x-3">
-                    <div>
-                        <span class="text-[10px] uppercase font-bold text-stone-400 block">Class Code</span>
-                        <span class="font-mono font-black text-maroon-900 text-sm bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200 inline-block mt-0.5">${tpl.classCode}</span>
-                    </div>
-                    <button type="button" onclick="removeTemplate(${tpl.id})" class="text-stone-400 hover:text-rose-600 transition text-sm cursor-pointer">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-stone-50 p-3 rounded-2xl border border-stone-200 text-xs space-y-1.5">
-                ${componentsHtml}
-            </div>
-        `;
-        container.appendChild(card);
-    });
-}
-
 function renderStudentTrendChart() {
-    if (!google.visualization) return;
+    if (!window.google?.visualization) return;
     const data = new google.visualization.DataTable();
     data.addColumn('string', 'Subject');
     data.addColumn('number', 'Current Grade');
@@ -327,7 +250,7 @@ function renderStudentTrendChart() {
         vAxis: {
             title: 'PUP Grade Scale (1.00 - 5.00)',
             direction: -1,
-            ticks: [1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00, 5.00]
+            ticks: window.studentDashboardData.gradeScale
         },
         legend: { position: 'bottom' },
         chartArea: { width: '80%', height: '70%' }
@@ -338,12 +261,22 @@ function renderStudentTrendChart() {
 }
 
 window.addSubjectRow = function() {
-    const subjCode = prompt("Enter Course Code:", "PHYS-101");
+    const subjCode = prompt("Enter Course Code:")?.trim();
     if (!subjCode) return;
-    const title = prompt("Enter Course Title:", "General Physics") || "Core Subject";
-    const units = parseFloat(prompt("Enter Unit Value:", "3.0")) || 3.0;
+    const title = prompt("Enter Course Title:")?.trim();
+    if (!title) return;
+    const unitsInput = prompt("Enter Unit Value:");
+    if (unitsInput === null) return;
+    const units = Number(unitsInput);
+    if (!Number.isFinite(units) || units <= 0 || units > 99.9 || Math.round(units * 10) / 10 !== units) {
+        alert('Enter a positive unit value up to 99.9, with at most one decimal place.');
+        return;
+    }
 
-    studentGradesData.push({ id: Date.now(), subject: subjCode.toUpperCase(), title: title, grade: 1.50, target: 1.00, units: units });
+    studentGradesData.push({
+        id: Date.now(), subject: subjCode.toUpperCase(), title, grade: null,
+        gradeStatus: 'Not entered', target: window.studentDashboardData.targetGrades[0], units
+    });
     recalculateGradesAndStats(false);
 }
 
@@ -373,82 +306,4 @@ window.removeSubjectRow = function(id) {
     if (!confirm("Remove this manually added course from your tracker?")) return;
     studentGradesData = studentGradesData.filter(item => item.id !== id);
     recalculateGradesAndStats(false);
-}
-
-function addComponentRow() {
-    const container = document.getElementById('componentContainer');
-    const row = document.createElement('div');
-    row.className = 'flex items-center space-x-2 component-row';
-    row.innerHTML = `
-        <input type="text" placeholder="Assessment Name" class="comp-name flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
-        <input type="number" value="10" class="comp-weight w-24 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
-        <span class="font-bold text-stone-400">%</span>
-        <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-2 cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
-    `;
-    container.appendChild(row);
-    calculateTotalWeight();
-}
-
-function calculateTotalWeight() {
-    const weights = document.querySelectorAll('.comp-weight');
-    let total = 0;
-    weights.forEach(w => total += parseFloat(w.value) || 0);
-
-    const badge = document.getElementById('weightTotalBadge');
-    badge.innerText = `Total Weight: ${total}%`;
-    badge.className = total === 100
-        ? "text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200"
-        : "text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200";
-
-    return total;
-}
-
-function publishTemplate() {
-    const total = calculateTotalWeight();
-    if (total !== 100) return alert(`Total weight must equal 100%. Current total is ${total}%.`);
-
-    const code = document.getElementById('courseCodeInput').value.trim();
-    const title = document.getElementById('courseTitleInput').value.trim();
-    if (!code || !title) return alert('Please enter Course Code and Title.');
-
-    const compNames = document.querySelectorAll('.comp-name');
-    const compWeights = document.querySelectorAll('.comp-weight');
-    let components = [];
-
-    compNames.forEach((n, i) => {
-        components.push({ name: n.value || 'Component', weight: parseFloat(compWeights[i].value) || 0 });
-    });
-
-    const generatedCode = `${code.replace(/[^a-zA-Z0-9]/g, '')}-SEC${Math.floor(1 + Math.random() * 9)}`;
-
-    enrolledTemplates.push({ id: Date.now(), code, title, classCode: generatedCode, components });
-    renderTemplatesList();
-    alert(`Template successfully published!\nShared Class Code: ${generatedCode}`);
-}
-
-function enrollTemplateCode() {
-    const code = document.getElementById('templateCodeInput').value.trim();
-    if (!code) return alert('Please enter a Class Code.');
-
-    enrolledTemplates.push({
-        id: Date.now(),
-        code: code.split('-')[0] || 'SYNC-101',
-        title: 'Enrolled Instructor Course',
-        classCode: code.toUpperCase(),
-        components: [
-            { name: 'Quizzes & Assignments', weight: 40 },
-            { name: 'Midterm & Final Examination', weight: 60 }
-        ]
-    });
-
-    document.getElementById('templateCodeInput').value = '';
-    renderTemplatesList();
-    alert(`Enrolled in Class Code ${code}! Course grading structure inherited.`);
-}
-
-window.removeTemplate = function(id) {
-    if (confirm("Remove this enrolled template?")) {
-        enrolledTemplates = enrolledTemplates.filter(t => t.id !== id);
-        renderTemplatesList();
-    }
 }

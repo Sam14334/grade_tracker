@@ -40,9 +40,7 @@ function hideForgotPassword() {
 
 function handleForgotPassword(e) {
     e.preventDefault();
-    const identifier = document.getElementById('resetIdentifier').value.trim();
-    showAlert(`Password reset link sent to ${identifier} if registered.`, 'success');
-    document.getElementById('forgotPasswordForm').reset();
+    showAlert('Password reset is not available yet.', 'error');
 }
 
 // Student/Professor Role Switcher (Login)

@@ -1,12 +1,10 @@
 <?php
+require_once __DIR__ . '/config.php';
+
 // send email via resend api
 function sendResendEmail($to, $subject, $html) {
-    $apiKey = getenv('RESEND_API_KEY') ?: ($_ENV['RESEND_API_KEY'] ?? '');
-    $from = getenv('RESEND_FROM_EMAIL') ?: ($_ENV['RESEND_FROM_EMAIL'] ?? 'no-reply@verify.gradeseer.site');
-
-    if (empty($apiKey)) {
-        throw new Exception("RESEND_API_KEY is not configured in .env");
-    }
+    $apiKey = requiredConfig('RESEND_API_KEY');
+    $from = requiredConfig('RESEND_FROM_EMAIL');
 
     $ch = curl_init('https://api.resend.com/emails');
     $payload = json_encode([

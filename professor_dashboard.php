@@ -150,8 +150,7 @@ while ($enrollment = $enrollmentStmt->fetch()) {
             </div>
 
             <div class="pt-4 border-t border-stone-300/80 text-[11px] text-stone-500 font-medium">
-                <p>College of Computer Studies</p>
-                <p class="text-[10px] text-stone-400">PUP Biñan Campus • Professor</p>
+                <p>Professor Account</p>
             </div>
         </aside>
 
@@ -270,15 +269,15 @@ while ($enrollment = $enrollmentStmt->fetch()) {
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <div>
                                 <label class="block font-bold uppercase text-stone-600 mb-1">Course Code</label>
-                                <input type="text" name="courseCode" id="courseCodeInput" value="CS-301" maxlength="20" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                <input type="text" name="courseCode" id="courseCodeInput" placeholder="Enter course code" maxlength="20" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
                             </div>
                             <div>
                                 <label class="block font-bold uppercase text-stone-600 mb-1">Course Title</label>
-                                <input type="text" name="courseTitle" id="courseTitleInput" value="Software Engineering" maxlength="100" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                <input type="text" name="courseTitle" id="courseTitleInput" placeholder="Enter course title" maxlength="100" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
                             </div>
                             <div>
                                 <label for="courseUnitInput" class="block font-bold uppercase text-stone-600 mb-1">Unit</label>
-                                <input type="number" name="courseUnit" id="courseUnitInput" value="3.0" min="0.1" max="99.9" step="0.1" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                <input type="number" name="courseUnit" id="courseUnitInput" placeholder="Enter units" min="0.1" max="99.9" step="0.1" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
                             </div>
                         </div>
 
@@ -287,21 +286,20 @@ while ($enrollment = $enrollmentStmt->fetch()) {
                         <section class="period-components space-y-3 p-4 bg-stone-50 rounded-2xl border border-stone-200" data-period="<?php echo $period; ?>">
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <h4 class="font-bold text-maroon-900"><?php echo $label; ?></h4>
-                                <span id="weightTotalBadge-<?php echo $period; ?>" class="text-xs font-bold text-emerald-700">Total Weight: 100%</span>
+                                <span id="weightTotalBadge-<?php echo $period; ?>" class="text-xs font-bold text-rose-700">Total Weight: 0%</span>
                             </div>
                             <p class="text-[11px] text-stone-500">Weights must total 100%. You may mark up to one component as an exam.</p>
                             <div class="space-y-2" id="componentContainer-<?php echo $period; ?>">
-                                <?php foreach ([['Quizzes & Seatwork', 50], ['Activities', 20], [$label === 'Midterms' ? 'Midterm Examination' : 'Final Examination', 30]] as $index => [$name, $weight]): ?>
+                                <?php $index = 0; ?>
                                 <div class="flex flex-wrap items-center gap-2 component-row">
-                                    <input type="text" name="components[<?php echo $period; ?>][<?php echo $index; ?>][name]" value="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>" maxlength="100" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                    <input type="text" name="components[<?php echo $period; ?>][<?php echo $index; ?>][name]" placeholder="Assessment name" maxlength="100" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
                                     <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
                                         <input type="checkbox" name="components[<?php echo $period; ?>][<?php echo $index; ?>][is_exam]" value="1" onchange="limitExam(this)" class="comp-exam w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
                                     </label>
-                                    <input type="number" name="components[<?php echo $period; ?>][<?php echo $index; ?>][weight]" value="<?php echo $weight; ?>" min="1" max="100" step="1" oninput="calculateTotalWeight()" required class="comp-weight w-20 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                    <input type="number" name="components[<?php echo $period; ?>][<?php echo $index; ?>][weight]" placeholder="Weight" min="1" max="100" step="1" oninput="calculateTotalWeight()" required class="comp-weight w-20 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                     <span class="font-bold text-stone-400">%</span>
                                     <button type="button" onclick="removeRow(this)" aria-label="Remove component" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
                                 </div>
-                                <?php endforeach; ?>
                             </div>
                             <button type="button" onclick="addComponentRow('<?php echo $period; ?>')" class="text-xs font-bold text-maroon-800 hover:underline">+ Add <?php echo $label; ?> Component</button>
                         </section>
@@ -346,8 +344,10 @@ while ($enrollment = $enrollmentStmt->fetch()) {
     <script>
         let enrolledTemplates = <?php echo json_encode($publishedTemplates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         const standingCourses = <?php echo json_encode(array_values($standingCourses), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-        const nextComponentIndex = {midterms: 3, finals: 3};
-        const periodLabels = {midterms: 'Midterms', finals: 'Finals'};
+        const periodLabels = <?php echo json_encode(gradingPeriods()); ?>;
+        const nextComponentIndex = Object.fromEntries(Object.keys(periodLabels).map(period => [
+            period, document.querySelectorAll(`#componentContainer-${period} .component-row`).length
+        ]));
         let activeStandingFilter = 'all';
 
         function escapeHtml(value) {
@@ -623,7 +623,7 @@ while ($enrollment = $enrollmentStmt->fetch()) {
                 <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
                     <input type="checkbox" name="components[${period}][${index}][is_exam]" value="1" onchange="limitExam(this)" class="comp-exam w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
                 </label>
-                <input type="number" name="components[${period}][${index}][weight]" value="10" min="1" max="100" step="1" oninput="calculateTotalWeight()" required class="comp-weight w-20 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                <input type="number" name="components[${period}][${index}][weight]" placeholder="Weight" min="1" max="100" step="1" oninput="calculateTotalWeight()" required class="comp-weight w-20 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                 <span class="font-bold text-stone-400">%</span>
                 <button type="button" onclick="removeRow(this)" aria-label="Remove component" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>`;
             container.appendChild(row);

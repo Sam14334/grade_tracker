@@ -17,12 +17,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const urlParams = new URLSearchParams(window.location.search);
-    const emailParam = urlParams.get('email');
-    const displayEmail = document.getElementById('displayEmail');
-    if (emailParam && displayEmail) {
-        displayEmail.textContent = emailParam;
-    }
-
     const infoParam = urlParams.get('info');
     if (infoParam) {
         showOtpAlert(decodeURIComponent(infoParam), 'error');

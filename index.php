@@ -270,19 +270,6 @@ if (isset($_SESSION['user_id'])) {
               ></i>
             </button>
 
-            <div class="pt-2 text-center border-t border-slate-100">
-              <p class="text-[11px] text-slate-400 font-medium leading-relaxed">
-                Demo:
-                <span class="text-maroon-800 font-bold"
-                  >catsovercash@iskolarngbayan.pup.edu.ph</span
-                >
-                or
-                <span class="text-maroon-800 font-bold"
-                  >professor@pup.edu.ph</span
-                >
-                (pw: <span class="text-maroon-800 font-bold">123123123</span>)
-              </p>
-            </div>
           </form>
         </div>
 

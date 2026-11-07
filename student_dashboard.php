@@ -141,8 +141,7 @@ while ($row = $enrolledStmt->fetch()) {
             </div>
 
             <div class="pt-4 border-t border-stone-300/80 text-[11px] text-stone-500 font-medium">
-                <p>IT Elective - Software Eng.</p>
-                <p class="text-[10px] text-stone-400">PUP Biñan Campus • Student</p>
+                <p>Student Account</p>
             </div>
         </aside>
 
@@ -151,7 +150,7 @@ while ($row = $enrolledStmt->fetch()) {
             <div class="flex items-center justify-between pb-2 border-b border-stone-300/60">
                 <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Welcome, <?php echo $userName; ?>!</h2>
                 <div class="text-right">
-                    <span class="text-xs sm:text-sm font-semibold text-stone-500">Sep 25, 2026</span>
+                    <span class="text-xs sm:text-sm font-semibold text-stone-500"><?php echo date('M j, Y'); ?></span>
                     <button onclick="window.print()" class="block text-[11px] text-maroon-800 font-bold hover:underline no-print">
                         <i class="fa-solid fa-print mr-1"></i>Export Target PDF
                     </button>
@@ -165,9 +164,15 @@ while ($row = $enrolledStmt->fetch()) {
                     <div class="text-xs text-amber-900 space-y-1 w-full">
                         <div class="flex items-center justify-between">
                             <span class="font-bold text-sm" id="bannerTargetTitle">Academic Honor Qualification Status</span>
-                            <span class="font-black text-emerald-700 text-xs" id="bannerTargetBadge">Target Goal: GWA ≤ 1.45</span>
+                            <span class="font-black text-emerald-700 text-xs" id="bannerTargetBadge">No GWA target set</span>
                         </div>
                         <p id="ruleDiagnosticText">Enter grades for your enrolled courses to calculate your GWA.</p>
+                        <form id="gwaGoalForm" class="no-print flex flex-wrap items-center gap-2 pt-2">
+                            <label for="thresholdSettingInput" class="font-semibold">Your GWA target</label>
+                            <input id="thresholdSettingInput" type="number" min="1" max="5" step="0.01" required placeholder="Enter target" class="w-28 px-2 py-1.5 rounded-lg border border-stone-300 text-slate-800">
+                            <button type="submit" class="px-3 py-1.5 rounded-lg bg-maroon-900 text-white font-bold">Save target</button>
+                            <span id="saveStatusMsg" role="status" class="hidden">Saved on this browser.</span>
+                        </form>
                     </div>
                 </div>
 
@@ -253,7 +258,7 @@ while ($row = $enrolledStmt->fetch()) {
                     </p>
 
                     <form action="php/enroll_course.php" method="POST" class="flex gap-3 max-w-md">
-                        <input type="text" name="templateCodeInput" id="templateCodeInput" placeholder="Enter Class Code (e.g. CS301-SEC1)" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-xs font-bold uppercase outline-none focus:border-maroon-800">
+                        <input type="text" name="templateCodeInput" id="templateCodeInput" placeholder="Enter your professor's class code" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-xs font-bold uppercase outline-none focus:border-maroon-800">
                         <button type="submit" name="btnEnrollCourse" class="px-5 py-2.5 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl transition shrink-0">
                             Enroll & Sync
                         </button>
@@ -307,9 +312,10 @@ while ($row = $enrolledStmt->fetch()) {
     <!-- External Linked JavaScript File -->
     <script>
         window.studentDashboardData = {
-            serverRenderedTemplates: true,
+            userId: <?php echo json_encode($userId); ?>,
             csrfToken: <?php echo json_encode($_SESSION['score_csrf_token']); ?>,
             targetGrades: <?php echo json_encode(array_values(array_filter(array_column(pupGradeScale(), 1), fn($grade) => $grade <= 3.00))); ?>,
+            gradeScale: <?php echo json_encode(array_column(pupGradeScale(), 1)); ?>,
             enrolledCourses: <?php echo json_encode($dbEnrolled, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE); ?>
         };
     </script>

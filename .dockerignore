@@ -1,3 +1,5 @@
 .git
 .github
 *.md
+.env
+.env.*

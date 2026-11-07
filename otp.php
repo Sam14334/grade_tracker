@@ -81,7 +81,7 @@ if (!isset($_SESSION['pending_otp_email'])) {
                 </div>
                 <h2 class="text-lg font-bold text-slate-900">Enter Verification Code</h2>
                 <p class="text-xs text-slate-500 leading-relaxed">
-                    We've sent a 6-digit confirmation code to <span id="displayEmail" class="font-bold text-maroon-800">your registered PUP email</span>. Please check your inbox.
+                    We've sent a 6-digit confirmation code to <span id="displayEmail" class="font-bold text-maroon-800"><?php echo htmlspecialchars($_SESSION['pending_otp_email'], ENT_QUOTES, 'UTF-8'); ?></span>. Please check your inbox.
                 </p>
             </div>
 
