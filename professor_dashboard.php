@@ -13,13 +13,14 @@ if (!((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
 include 'php/db.php';
 require_once 'php/grade_calculator.php';
 require_once 'php/course_components.php';
+require_once 'php/template_form.php';
 if (!isset($_SESSION['score_csrf_token'])) $_SESSION['score_csrf_token'] = bin2hex(random_bytes(32));
 $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email'], ENT_QUOTES, 'UTF-8');
 $userInitial = strtoupper(substr($userName, 0, 1));
 
 $templatesStmt = $conn->prepare("
-    SELECT template_id, course_code, course_title, class_code
+    SELECT template_id, course_code, course_title, course_unit, class_code
     FROM grade_templates 
     WHERE user_id = ?
     ORDER BY created_at DESC
@@ -33,7 +34,7 @@ while ($row = $templatesStmt->fetch()) {
     $components = loadTemplateComponents($conn, $templateId);
     $publishedTemplates[] = [
         'id' => $templateId, 'code' => $row['course_code'], 'title' => $row['course_title'],
-        'classCode' => $row['class_code'], 'components' => $components,
+        'classCode' => $row['class_code'], 'units' => (float)$row['course_unit'], 'components' => $components,
     ];
     $standingCourses[$templateId] = [
         'id' => $templateId, 'code' => (string)$row['course_code'], 'title' => (string)$row['course_title'],
@@ -78,6 +79,48 @@ while ($enrollment = $enrollmentStmt->fetch()) {
         'status' => !$scores ? 'Not Started' : $result['status'], 'periods' => $result['periods'],
         'gradedWeight' => $gradedWeight, 'components' => $componentResults,
     ];
+}
+$editingTemplateId = isset($_GET['edit'])
+    ? filter_var($_GET['edit'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) : 0;
+$editingTemplate = null;
+if ($editingTemplateId !== 0) {
+    foreach ($publishedTemplates as $template) {
+        if ($template['id'] === $editingTemplateId) $editingTemplate = $template;
+    }
+    if (!$editingTemplate) {
+        http_response_code(404);
+        exit('Template not found in your published courses.');
+    }
+}
+$templateForm = templateFormInput([]);
+$lockedComponents = [];
+if ($editingTemplate) {
+    $templateForm = [
+        'courseCode' => $editingTemplate['code'], 'courseTitle' => $editingTemplate['title'],
+        'courseUnit' => (string)$editingTemplate['units'], 'components' => [],
+    ];
+    foreach (componentTables() as $period => $table) {
+        $templateForm['components'][$period] = [];
+        foreach ($editingTemplate['components'] as $component) {
+            if ($component['period'] !== $period) continue;
+            $templateForm['components'][$period][] = [
+                'id' => (string)$component['database_id'], 'name' => $component['name'],
+                'weight' => (string)$component['weight'], 'is_exam' => $component['is_exam'],
+            ];
+        }
+        $lockedComponents[$period] = array_fill_keys(loadUsedTemplateComponentIds($conn, $editingTemplateId, $period), true);
+    }
+}
+$savedForm = $_SESSION['template_form_input'] ?? null;
+unset($_SESSION['template_form_input']);
+if (is_array($savedForm) && $savedForm['id'] === $editingTemplateId) $templateForm = $savedForm['form'];
+foreach (gradingPeriods() as $period => $label) {
+    if (!$templateForm['components'][$period]) {
+        $templateForm['components'][$period][] = ['id' => '', 'name' => '', 'weight' => '', 'is_exam' => false];
+    }
+}
+function templateText($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 ?>
 <!DOCTYPE html>
@@ -246,6 +289,8 @@ while ($enrollment = $enrollmentStmt->fetch()) {
             <section id="templatesSection" class="hidden space-y-6">
                 <?php if (isset($_GET['error']) && is_string($_GET['error'])): ?>
                     <p role="alert" class="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-sm"><?php echo htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8'); ?></p>
+                <?php elseif (($_GET['template'] ?? '') === 'updated'): ?>
+                    <p role="status" class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-sm">Template updated. Enrolled students will see the changes when they reload their dashboard.</p>
                 <?php endif; ?>
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-stone-300/60">
                     <div>
@@ -256,28 +301,33 @@ while ($enrollment = $enrollmentStmt->fetch()) {
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <!-- Syllabus Builder Form -->
-                <div class="lg:col-span-7 bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-5">
+                <div id="templateEditor" class="lg:col-span-7 bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-5">
                     <div class="flex items-center justify-between border-b border-stone-100 pb-3">
                         <h3 class="font-bold text-slate-800 text-base flex items-center space-x-2">
                             <i class="fa-solid fa-sliders text-maroon-800"></i>
-                            <span>Create Course Template</span>
+                            <span><?php echo $editingTemplate ? 'Edit Course Template' : 'Create Course Template'; ?></span>
                         </h3>
                         <span class="text-xs text-stone-500">Each period: 100%</span>
                     </div>
 
+                    <?php if ($editingTemplate): ?>
+                        <p class="text-xs text-stone-600">Editing <strong><?php echo templateText($editingTemplate['code']); ?></strong>. Changes apply to all enrolled students. Existing scores stay attached; components with saved scores cannot be removed.</p>
+                    <?php endif; ?>
+
                     <form id="publishTemplateForm" action="php/publish_template.php" method="POST" onsubmit="return validatePublishForm(event)" class="space-y-4 text-xs">
+                        <input type="hidden" name="template_id" value="<?php echo $editingTemplateId; ?>">
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <div>
                                 <label class="block font-bold uppercase text-stone-600 mb-1">Course Code</label>
-                                <input type="text" name="courseCode" id="courseCodeInput" placeholder="Enter course code" maxlength="20" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                <input type="text" name="courseCode" id="courseCodeInput" value="<?php echo templateText($templateForm['courseCode']); ?>" placeholder="Enter course code" maxlength="20" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
                             </div>
                             <div>
                                 <label class="block font-bold uppercase text-stone-600 mb-1">Course Title</label>
-                                <input type="text" name="courseTitle" id="courseTitleInput" placeholder="Enter course title" maxlength="100" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                <input type="text" name="courseTitle" id="courseTitleInput" value="<?php echo templateText($templateForm['courseTitle']); ?>" placeholder="Enter course title" maxlength="100" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
                             </div>
                             <div>
                                 <label for="courseUnitInput" class="block font-bold uppercase text-stone-600 mb-1">Unit</label>
-                                <input type="number" name="courseUnit" id="courseUnitInput" placeholder="Enter units" min="0.1" max="99.9" step="0.1" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
+                                <input type="number" name="courseUnit" id="courseUnitInput" value="<?php echo templateText($templateForm['courseUnit']); ?>" placeholder="Enter units" min="0.1" max="99.9" step="0.1" required class="w-full px-3 py-2 rounded-xl border border-stone-300 font-bold text-slate-800 focus:border-maroon-800 outline-none">
                             </div>
                         </div>
 
@@ -290,16 +340,18 @@ while ($enrollment = $enrollmentStmt->fetch()) {
                             </div>
                             <p class="text-[11px] text-stone-500">Weights must total 100%. You may mark up to one component as an exam.</p>
                             <div class="space-y-2" id="componentContainer-<?php echo $period; ?>">
-                                <?php $index = 0; ?>
+                                <?php foreach ($templateForm['components'][$period] as $index => $component): ?>
                                 <div class="flex flex-wrap items-center gap-2 component-row">
-                                    <input type="text" name="components[<?php echo $period; ?>][<?php echo $index; ?>][name]" placeholder="Assessment name" maxlength="100" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
+                                    <input type="hidden" name="components[<?php echo $period; ?>][<?php echo $index; ?>][id]" value="<?php echo templateText($component['id']); ?>">
+                                    <input type="text" name="components[<?php echo $period; ?>][<?php echo $index; ?>][name]" value="<?php echo templateText($component['name']); ?>" placeholder="Assessment name" maxlength="100" required class="comp-name min-w-0 w-full sm:w-auto sm:flex-1 px-3 py-2 rounded-xl border border-stone-300 font-medium">
                                     <label class="flex items-center gap-1.5 font-semibold text-stone-600 cursor-pointer">
-                                        <input type="checkbox" name="components[<?php echo $period; ?>][<?php echo $index; ?>][is_exam]" value="1" onchange="limitExam(this)" class="comp-exam w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
+                                        <input type="checkbox" name="components[<?php echo $period; ?>][<?php echo $index; ?>][is_exam]" value="1" <?php if ($component['is_exam']) echo 'checked'; ?> onchange="limitExam(this)" class="comp-exam w-4 h-4 rounded border-stone-300 accent-maroon-900"> Exam
                                     </label>
-                                    <input type="number" name="components[<?php echo $period; ?>][<?php echo $index; ?>][weight]" placeholder="Weight" min="1" max="100" step="1" oninput="calculateTotalWeight()" required class="comp-weight w-20 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
+                                    <input type="number" name="components[<?php echo $period; ?>][<?php echo $index; ?>][weight]" value="<?php echo templateText($component['weight']); ?>" placeholder="Weight" min="1" max="100" step="1" oninput="calculateTotalWeight()" required class="comp-weight w-20 px-3 py-2 rounded-xl border border-stone-300 font-bold text-right">
                                     <span class="font-bold text-stone-400">%</span>
-                                    <button type="button" onclick="removeRow(this)" aria-label="Remove component" class="text-rose-500 hover:text-rose-700 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                                    <button type="button" onclick="removeRow(this)" aria-label="Remove component" <?php if (isset($lockedComponents[$period][$component['id']])) echo 'disabled title="This component has saved scores."'; ?> class="text-rose-500 hover:text-rose-700 disabled:text-stone-300 disabled:cursor-not-allowed p-2"><i class="fa-solid fa-trash-can"></i></button>
                                 </div>
+                                <?php endforeach; ?>
                             </div>
                             <button type="button" onclick="addComponentRow('<?php echo $period; ?>')" class="text-xs font-bold text-maroon-800 hover:underline">+ Add <?php echo $label; ?> Component</button>
                         </section>
@@ -308,8 +360,11 @@ while ($enrollment = $enrollmentStmt->fetch()) {
 
                         <div class="pt-4 border-t border-stone-200">
                             <button type="submit" name="btnPublishTemplate" class="w-full py-3 bg-maroon-900 hover:bg-maroon-800 text-white font-bold text-xs rounded-xl shadow-md transition text-center">
-                                Publish Syllabus & Generate Class Code
+                                <?php echo $editingTemplate ? 'Save Changes' : 'Publish Syllabus & Generate Class Code'; ?>
                             </button>
+                            <?php if ($editingTemplate): ?>
+                                <a href="professor_dashboard.php#templates" class="block mt-3 text-center font-bold text-stone-600 hover:underline">Cancel Editing</a>
+                            <?php endif; ?>
                         </div>
                     </form>
                 </div>
@@ -366,7 +421,7 @@ while ($enrollment = $enrollmentStmt->fetch()) {
             renderTemplatesList();
             calculateTotalWeight();
             initializeClassStanding();
-            if (window.location.hash === '#templates' || urlParams.has('template') || urlParams.has('error')) switchProfessorTab('templates');
+            if (window.location.hash === '#templates' || urlParams.has('template') || urlParams.has('error') || urlParams.has('edit')) switchProfessorTab('templates');
         });
 
         function switchProfessorTab(tab) {
@@ -588,18 +643,20 @@ while ($enrollment = $enrollmentStmt->fetch()) {
                         <div class="flex justify-between text-stone-600"><span>${escapeHtml(c.name)}${c.is_exam ? ' · Exam' : ''}</span><span class="font-bold">${c.weight}%</span></div>`).join('')}</div>`).join('');
 
                 card.innerHTML = `
-                    <div class="flex items-start justify-between">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <span class="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">PUBLISHED SYLLABUS</span>
                             <h4 class="font-extrabold text-slate-900 text-base mt-1">${escapeHtml(tpl.code)}</h4>
                             <p class="text-xs text-stone-500 font-medium">${escapeHtml(tpl.title)}</p>
+                            <p class="text-xs text-stone-500 font-medium">${Number(tpl.units).toFixed(1)} units</p>
                         </div>
-                        <div class="text-right flex items-center space-x-3">
+                        <div class="text-right flex flex-wrap items-center gap-2">
                             <div>
                                 <span class="text-[10px] uppercase font-bold text-stone-400 block">Class Sync Code</span>
                                 <span class="font-mono font-black text-maroon-900 text-sm bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200 inline-block mt-0.5">${escapeHtml(tpl.classCode)}</span>
                             </div>
-                            <button onclick="removeTemplate(${tpl.id})" class="text-stone-400 hover:text-rose-600 transition text-sm">
+                            <a href="professor_dashboard.php?edit=${tpl.id}#templates" class="inline-flex items-center gap-1 rounded-lg bg-maroon-50 px-2.5 py-1.5 text-xs font-bold text-maroon-900 hover:bg-maroon-100"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
+                            <button type="button" onclick="removeTemplate(${tpl.id})" aria-label="Delete template" class="text-stone-400 hover:text-rose-600 transition text-sm">
                                 <i class="fa-solid fa-trash-can"></i>
                             </button>
                         </div>
@@ -668,7 +725,7 @@ while ($enrollment = $enrollmentStmt->fetch()) {
             }
             const button = document.querySelector('button[name="btnPublishTemplate"]');
             button.disabled = true;
-            button.textContent = 'Publishing...';
+            button.textContent = document.querySelector('input[name="template_id"]').value !== '0' ? 'Saving...' : 'Publishing...';
             return true;
         }
 

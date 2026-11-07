@@ -26,6 +26,19 @@ function loadTemplateComponents(PDO $conn, int $templateId): array {
     return $components;
 }
 
+function loadUsedTemplateComponentIds(PDO $conn, int $templateId, string $period): array {
+    $tables = componentTables();
+    $columns = ['midterms' => 'midterm_component_id', 'finals' => 'final_component_id'];
+    if (!isset($tables[$period])) throw new InvalidArgumentException('Invalid grading period.');
+    $table = $tables[$period];
+    $column = $columns[$period];
+
+    $stmt = $conn->prepare("SELECT tc.id FROM $table tc WHERE tc.template_id = ?
+        AND EXISTS(SELECT 1 FROM student_component_scores s WHERE s.$column = tc.id)");
+    $stmt->execute([$templateId]);
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
 // The caller first checks ownership of the enrollment or its course template.
 function loadEnrollmentScores(PDO $conn, int $enrollmentId, int $templateId): array {
     $scores = [];
