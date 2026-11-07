@@ -89,6 +89,7 @@ function updateExamPrediction(components) {
     const note = document.getElementById('examPredictionNote');
     const maxInput = document.getElementById('predictorMax');
     const select = document.getElementById('predictorExam');
+    const targetLabel = document.getElementById('predictorTargetLabel');
     const exams = components.filter(component => component.isExam);
     const pending = exams.filter(component => component.maximum === 0);
     [...select.options].forEach(option => {
@@ -105,7 +106,8 @@ function updateExamPrediction(components) {
     }
     select.disabled = exams.length === 0;
     maxInput.disabled = pending.length === 0;
-    note.textContent = 'Uses only the selected exam’s period and the target set in Grade Entry. Predictions are not saved as scores.';
+    targetLabel.textContent = `Target grade: ${window.courseTargetGrade.toFixed(2)}`;
+    note.textContent = 'Midterm predictions use Midterms only. Final predictions use completed Midterms and Finals. Predictions are not saved as scores.';
     if (!exams.length) {
         result.textContent = 'No exams are marked in this course template.';
         return;
@@ -119,10 +121,21 @@ function updateExamPrediction(components) {
         result.textContent = 'Select a pending examination.';
         return;
     }
+    const isFinalExam = selected.period === 'finals';
+    targetLabel.textContent = `${isFinalExam ? 'Overall course target' : 'Midterm target'}: ${window.courseTargetGrade.toFixed(2)}`;
     const periodComponents = components.filter(component => component.period === selected.period);
     const period = calculatePeriodPreview(periodComponents);
     if (period.status === 'Invalid weights' || period.status === 'Check entries') {
         result.textContent = `Correct the ${periodLabels[selected.period]} weights or score entries before predicting.`;
+        return;
+    }
+    const midterms = isFinalExam
+        ? calculatePeriodPreview(components.filter(component => component.period === 'midterms')) : null;
+    if (isFinalExam && midterms.status !== 'Complete') {
+        result.textContent = midterms.status === 'Invalid weights' || midterms.status === 'Check entries'
+            ? 'Correct the Midterms weights or score entries before predicting the final exam.'
+            : 'Complete all Midterm scores, including the exam, before predicting the final exam.';
+        note.textContent = 'The final exam prediction needs the completed Midterm percentage to calculate the overall course target.';
         return;
     }
     const others = periodComponents.filter(component => component.id !== selected.id);
@@ -148,11 +161,15 @@ function updateExamPrediction(components) {
     const maximum = Number(maxInput.value);
     const otherPoints = others.reduce((sum, component) => sum +
         (component.maximum > 0 ? component.earned / component.maximum * component.weight : 0), 0);
-    const required = Math.max(0, Math.ceil(Number(((target[0] - otherPoints) / selected.weight * maximum).toFixed(10))));
-    if (required > maximum) result.textContent = 'Target unreachable with this exam';
-    else if (required === 0) result.textContent = 'Target already secured for this period';
+    // Midterms target their own period; Finals target the 50/50 overall course grade.
+    const requiredPeriodPercentage = isFinalExam ? (target[0] - midterms.percentage * 0.5) / 0.5 : target[0];
+    const required = Math.max(0, Math.ceil(Number(((requiredPeriodPercentage - otherPoints) / selected.weight * maximum).toFixed(10))));
+    if (required > maximum) result.textContent = isFinalExam ? 'Overall course target unreachable with this exam' : 'Target unreachable with this exam';
+    else if (required === 0) result.textContent = isFinalExam ? 'Overall course target already secured' : 'Target already secured for this period';
     else result.textContent = `You need at least ${required} / ${maximum} on ${selected.name}.`;
-    note.textContent = `${periodLabels[selected.period]} target: ${window.courseTargetGrade.toFixed(2)} or better (${target[0]}%). Required score: ${required} / ${maximum}, rounded up. Only ${periodLabels[selected.period]} coursework is used, even when the other period has scores.`;
+    note.textContent = isFinalExam
+        ? `Overall course target: ${window.courseTargetGrade.toFixed(2)} or better (${target[0]}%). Midterms: ${midterms.percentage.toFixed(2)}%. With 50% Midterms and 50% Finals, the Finals period needs ${requiredPeriodPercentage.toFixed(2)}%. Required exam score: ${required} / ${maximum}, rounded up.`
+        : `Midterms target: ${window.courseTargetGrade.toFixed(2)} or better (${target[0]}%). Required score: ${required} / ${maximum}, rounded up. Only Midterm coursework is used.`;
 }
 
 document.getElementById('predictorExam').addEventListener('change', () => {
