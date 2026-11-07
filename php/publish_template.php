@@ -39,10 +39,19 @@ try {
         $stmt = $conn->prepare('UPDATE grade_templates SET course_code = ?, course_title = ?, course_unit = ? WHERE template_id = ? AND user_id = ?');
         $stmt->execute([$form['courseCode'], $form['courseTitle'], $form['courseUnit'], $templateId, $userId]);
     } else {
-        $classCode = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $form['courseCode'])) . '-SEC' . random_int(1, 9);
-        $stmt = $conn->prepare('INSERT INTO grade_templates (user_id, course_code, course_title, class_code, course_unit) VALUES (?, ?, ?, ?, ?) RETURNING template_id');
-        $stmt->execute([$userId, $form['courseCode'], $form['courseTitle'], $classCode, $form['courseUnit']]);
-        $templateId = (int)$stmt->fetchColumn();
+        $codePrefix = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $form['courseCode'])) . '-SEC';
+        $stmt = $conn->prepare('INSERT INTO grade_templates (user_id, course_code, course_title, class_code, course_unit)
+            VALUES (?, ?, ?, ?, ?) ON CONFLICT (class_code) DO NOTHING RETURNING template_id');
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $classCode = $codePrefix . random_int(100000, 999999);
+            $stmt->execute([$userId, $form['courseCode'], $form['courseTitle'], $classCode, $form['courseUnit']]);
+            $newId = $stmt->fetchColumn();
+            if ($newId !== false) {
+                $templateId = (int)$newId;
+                break;
+            }
+        }
+        if ($templateId === 0) throw new DomainException('Could not generate an available enrollment code. Please try publishing again.');
     }
 
     foreach (componentTables() as $period => $table) {
