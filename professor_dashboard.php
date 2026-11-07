@@ -1,13 +1,24 @@
 <?php
 session_start();
+$standingsRequest = ($_GET['standings'] ?? '') === '1';
+if ($standingsRequest) {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+}
 if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
+    if ($standingsRequest) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Please sign in again.']);
+    } else header("Location: index.php");
     exit();
 }
 // Enforce professor role access
 if (!((isset($_SESSION['role_id']) && (int)$_SESSION['role_id'] === 2) ||
     (isset($_SESSION['role']) && strcasecmp($_SESSION['role'], 'Professor') === 0))) {
-    header("Location: student_dashboard.php");
+    if ($standingsRequest) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Professor access is required.']);
+    } else header("Location: student_dashboard.php");
     exit();
 }
 include 'php/db.php';
@@ -18,6 +29,7 @@ if (!isset($_SESSION['score_csrf_token'])) $_SESSION['score_csrf_token'] = bin2h
 $userId = (int)$_SESSION['user_id'];
 $userName = htmlspecialchars(!empty($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email'], ENT_QUOTES, 'UTF-8');
 $userInitial = strtoupper(substr($userName, 0, 1));
+if ($standingsRequest) session_write_close();
 
 $templatesStmt = $conn->prepare("
     SELECT template_id, course_code, course_title, course_unit, class_code
@@ -64,21 +76,34 @@ while ($enrollment = $enrollmentStmt->fetch()) {
     }
     $componentResults = [];
     $gradedWeight = 0;
+    $earnedPoints = 0.0;
     foreach ($components as $component) {
         $total = $totals[$component['id']] ?? ['score' => 0.0, 'max' => 0, 'assessments' => []];
-        if ($total['max'] > 0) $gradedWeight += $component['weight'] / 2;
+        if ($total['max'] > 0) {
+            // Each period contributes half of the course weight. Recorded zeros count.
+            $gradedWeight += $component['weight'] / 2;
+            $earnedPoints += ($total['score'] / $total['max']) * ($component['weight'] / 2);
+        }
         $componentResults[] = [
             'id' => $component['id'], 'period' => $component['period'], 'name' => $component['name'],
             'weight' => $component['weight'], 'percentage' => $total['max'] > 0 ? $total['score'] / $total['max'] * 100 : null,
             'score' => $total['score'], 'max' => $total['max'], 'assessments' => $total['assessments'],
         ];
     }
+    $currentPercentage = $gradedWeight > 0 && $result['status'] !== 'Invalid weights'
+        ? round($earnedPoints / $gradedWeight * 100, 10) : null;
     $standingCourses[$templateId]['students'][] = [
         'enrollmentId' => (int)$enrollment['enrollment_id'], 'student' => $enrollment['full_name'] ?: $enrollment['email'],
-        'email' => $enrollment['email'], 'percentage' => $result['percentage'], 'grade' => $result['grade'],
-        'status' => !$scores ? 'Not Started' : $result['status'], 'periods' => $result['periods'],
+        'email' => $enrollment['email'], 'percentage' => $currentPercentage, 'grade' => $result['grade'],
+        'status' => $result['status'] === 'Invalid weights' ? 'Invalid weights'
+            : ($currentPercentage === null ? 'Not Started' : ($result['status'] === 'Complete' ? 'Complete' : 'Provisional')),
+        'periods' => $result['periods'],
         'gradedWeight' => $gradedWeight, 'components' => $componentResults,
     ];
+}
+if ($standingsRequest) {
+    echo json_encode(['courses' => array_values($standingCourses), 'updatedAt' => date('c')], JSON_INVALID_UTF8_SUBSTITUTE);
+    exit();
 }
 $editingTemplateId = isset($_GET['edit'])
     ? filter_var($_GET['edit'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) : 0;
@@ -208,7 +233,8 @@ function templateText($value): string {
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-stone-300/60">
                     <div>
                         <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Class Standing Overview</h2>
-                        <p class="text-xs font-semibold text-stone-500 mt-0.5">Live standings calculated from the scores students have entered.</p>
+                        <p class="text-xs font-semibold text-stone-500 mt-0.5">Current standings from saved scores. Updates automatically every 15 seconds.</p>
+                        <p id="standingRefreshStatus" role="status" class="text-[11px] text-stone-400 mt-1">Last updated: <?php echo date('g:i:s A'); ?></p>
                     </div>
                     <span class="text-xs sm:text-sm font-semibold text-stone-500"><?php echo date('M j, Y'); ?></span>
                 </div>
@@ -216,7 +242,7 @@ function templateText($value): string {
                 <div class="bg-white p-4 sm:p-5 rounded-2xl border border-stone-200 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3">
                     <label for="courseFilter" class="text-xs font-bold text-stone-600">Course</label>
                     <select id="courseFilter" class="w-full sm:w-auto min-w-64 px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold text-slate-800">
-                        <option value="all">All Courses (Overall Standing)</option>
+                        <option value="all">All Courses (Ranked Within Each Course)</option>
                     </select>
                     <p id="courseScopeLabel" class="sm:ml-auto text-xs text-stone-500">Across all your active classes</p>
                 </div>
@@ -248,9 +274,9 @@ function templateText($value): string {
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <h3 class="font-bold text-slate-800">Course Standing Summary</h3>
-                            <p class="text-xs text-stone-500 mt-1">Overall standing uses 50% Midterms and 50% Finals. Each period has its own 100% grading weights.</p>
+                            <p class="text-xs text-stone-500 mt-1">Standing averages only components with saved scores, using their course weights. Recorded zeros count; unentered components stay pending.</p>
                         </div>
-                        <span class="text-[11px] text-stone-400">Incomplete courses are labeled in progress.</span>
+                        <span class="text-[11px] text-stone-400">Ranks are provisional until all components have scores.</span>
                     </div>
                     <div id="courseSummaryList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
                 </section>
@@ -276,6 +302,7 @@ function templateText($value): string {
                             <input id="studentSearch" type="search" placeholder="Search students..." class="w-full md:w-64 px-3 py-2 rounded-xl border border-stone-300 text-xs outline-none focus:border-maroon-800">
                         </div>
                     </div>
+                    <p class="text-[11px] text-stone-500">Coverage is the course weight represented by components with saved scores. It does not mean all assessments in those components are finished.</p>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-xs min-w-[900px]">
                             <thead id="standingTableHead"></thead>
@@ -398,12 +425,13 @@ function templateText($value): string {
 
     <script>
         let enrolledTemplates = <?php echo json_encode($publishedTemplates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-        const standingCourses = <?php echo json_encode(array_values($standingCourses), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+        let standingCourses = <?php echo json_encode(array_values($standingCourses), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         const periodLabels = <?php echo json_encode(gradingPeriods()); ?>;
         const nextComponentIndex = Object.fromEntries(Object.keys(periodLabels).map(period => [
             period, document.querySelectorAll(`#componentContainer-${period} .component-row`).length
         ]));
         let activeStandingFilter = 'all';
+        let refreshingStandings = false;
 
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -437,16 +465,12 @@ function templateText($value): string {
             document.getElementById('nav-templates').className = showStanding
                 ? 'w-full text-left px-4 py-3 rounded-xl font-medium text-xs text-stone-700 hover:bg-stone-200/60 transition flex items-center space-x-3'
                 : 'w-full text-left px-4 py-3 rounded-xl font-bold text-xs flex items-center space-x-3 bg-maroon-100 text-maroon-900 border border-maroon-200';
+            if (showStanding) refreshStandings();
         }
 
         function initializeClassStanding() {
             const courseFilter = document.getElementById('courseFilter');
-            standingCourses.forEach(course => {
-                const option = document.createElement('option');
-                option.value = String(course.id);
-                option.textContent = `${course.code} — ${course.title}`;
-                courseFilter.appendChild(option);
-            });
+            updateCourseOptions();
             courseFilter.addEventListener('change', renderClassStanding);
             document.getElementById('rankSort').addEventListener('change', renderClassStanding);
             document.getElementById('studentSearch').addEventListener('input', renderClassStanding);
@@ -463,6 +487,51 @@ function templateText($value): string {
             });
             renderCourseSummaries();
             renderClassStanding();
+            setInterval(refreshStandings, 15000);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) refreshStandings();
+            });
+        }
+
+        function updateCourseOptions() {
+            const courseFilter = document.getElementById('courseFilter');
+            const selected = courseFilter.value;
+            courseFilter.innerHTML = '<option value="all">All Courses (Ranked Within Each Course)</option>';
+            standingCourses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = String(course.id);
+                option.textContent = `${course.code} — ${course.title}`;
+                courseFilter.appendChild(option);
+            });
+            if (standingCourses.some(course => String(course.id) === selected)) courseFilter.value = selected;
+        }
+
+        async function refreshStandings() {
+            if (refreshingStandings || document.hidden || document.getElementById('standingSection').classList.contains('hidden')) return;
+            refreshingStandings = true;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000);
+            const status = document.getElementById('standingRefreshStatus');
+            try {
+                const response = await fetch('professor_dashboard.php?standings=1', {
+                    headers: {'Accept': 'application/json'}, cache: 'no-store', signal: controller.signal
+                });
+                if (!response.ok) throw new Error('Standings could not be refreshed.');
+                const data = await response.json();
+                if (!Array.isArray(data.courses)) throw new Error('Invalid standings response.');
+                standingCourses = data.courses;
+                updateCourseOptions();
+                renderCourseSummaries();
+                renderClassStanding();
+                const dialog = document.getElementById('standingDialog');
+                if (dialog.open) showStandingDetails(Number(dialog.dataset.enrollmentId));
+                status.textContent = `Last updated: ${new Date(data.updatedAt).toLocaleTimeString()}`;
+            } catch {
+                status.textContent = 'Could not refresh. Showing previous data; retrying automatically.';
+            } finally {
+                clearTimeout(timeout);
+                refreshingStandings = false;
+            }
         }
 
         function selectedCourses() {
@@ -493,8 +562,8 @@ function templateText($value): string {
 
         function standingStatus(row) {
             if (row.percentage === null) return {label: row.status, style: 'bg-stone-100 text-stone-600'};
-            if (row.percentage < 75) return {label: 'At Risk', style: 'bg-rose-100 text-rose-700'};
-            if (row.status !== 'Complete') return {label: 'In Progress', style: 'bg-amber-100 text-amber-800'};
+            if (row.percentage < 75) return {label: row.status === 'Complete' ? 'At Risk' : 'At Risk · Provisional', style: 'bg-rose-100 text-rose-700'};
+            if (row.status !== 'Complete') return {label: 'Provisional', style: 'bg-amber-100 text-amber-800'};
             if (row.percentage >= 90) return {label: 'Outstanding', style: 'bg-emerald-100 text-emerald-700'};
             return {label: 'Good Standing', style: 'bg-blue-100 text-blue-700'};
         }
@@ -554,22 +623,21 @@ function templateText($value): string {
             const showCourse = document.getElementById('courseFilter').value === 'all';
             const components = courses.length === 1 ? courses[0].components : [];
             tableHead.innerHTML = `<tr class="bg-stone-50 text-[10px] uppercase tracking-wide text-stone-500 border-b border-stone-200">
-                <th class="p-3">Rank</th><th class="p-3">Student</th>${showCourse ? '<th class="p-3">Course</th>' : ''}
+                <th class="p-3">Course Rank</th><th class="p-3">Student</th>${showCourse ? '<th class="p-3">Course</th>' : ''}
                 <th class="p-3">Current Standing</th>${components.map(component => `<th class="p-3">${periodLabels[component.period]} · ${escapeHtml(component.name)} (${component.weight}%)</th>`).join('')}
-                <th class="p-3">Progress / Status</th><th class="p-3 text-right">Action</th></tr>`;
+                <th class="p-3">Coverage / Status</th><th class="p-3 text-right">Action</th></tr>`;
             const sort = document.getElementById('rankSort').value;
-            const scoreRankings = [...allRows].sort((a, b) => {
-                if (a.percentage === null) return b.percentage === null ? a.student.localeCompare(b.student) : 1;
-                if (b.percentage === null) return -1;
-                return b.percentage - a.percentage;
-            });
             const rankByEnrollment = new Map();
-            let rank = 0;
-            let previousScore = null;
-            scoreRankings.forEach((row, index) => {
-                if (row.percentage !== null && row.percentage !== previousScore) rank = index + 1;
-                rankByEnrollment.set(row.enrollmentId, row.percentage === null ? '—' : rank);
-                previousScore = row.percentage;
+            courses.forEach(course => {
+                const ranked = allRows.filter(row => row.course.id === course.id && row.percentage !== null)
+                    .sort((a, b) => b.percentage - a.percentage);
+                let rank = 0;
+                let previousScore = null;
+                ranked.forEach((row, index) => {
+                    if (row.percentage !== previousScore) rank = index + 1;
+                    rankByEnrollment.set(row.enrollmentId, rank);
+                    previousScore = row.percentage;
+                });
             });
             rows.sort((a, b) => {
                 if (sort === 'name') return a.student.localeCompare(b.student);
@@ -584,9 +652,9 @@ function templateText($value): string {
                     return `<td class="p-3 text-stone-600">${formatPercentage(item?.percentage ?? null)}</td>`;
                 }).join('');
                 const current = formatPercentage(row.percentage);
-                const progressText = row.percentage === null ? 'No scores' : `${row.gradedWeight}% weight graded`;
+                const progressText = `${row.gradedWeight}% course weight covered`;
                 return `<tr class="hover:bg-stone-50/80">
-                    <td class="p-3 font-bold text-stone-500">#${rankByEnrollment.get(row.enrollmentId)}</td>
+                    <td class="p-3 font-bold text-stone-500">${rankByEnrollment.has(row.enrollmentId) ? `#${rankByEnrollment.get(row.enrollmentId)}` : '—'}</td>
                     <td class="p-3"><p class="font-bold text-slate-800">${escapeHtml(row.student)}</p><p class="text-[10px] text-stone-400 mt-0.5">${escapeHtml(row.email)}</p></td>
                     ${showCourse ? `<td class="p-3 font-semibold text-stone-600">${escapeHtml(row.course.code)}</td>` : ''}
                     <td class="p-3"><span class="font-black text-slate-900">${current}</span>${row.percentage !== null ? `<div class="mt-1 h-1.5 w-20 rounded-full bg-stone-100"><div class="h-1.5 rounded-full ${row.percentage < 75 ? 'bg-rose-500' : 'bg-maroon-900'}" style="width:${Math.max(0, Math.min(100, row.percentage))}%"></div></div>` : ''}</td>
@@ -604,13 +672,14 @@ function templateText($value): string {
         function showStandingDetails(enrollmentId) {
             const course = standingCourses.find(item => item.students.some(student => student.enrollmentId === enrollmentId));
             const student = course?.students.find(item => item.enrollmentId === enrollmentId);
-            if (!course || !student) return;
+            const dialog = document.getElementById('standingDialog');
+            if (!course || !student) { dialog.close(); return; }
             document.getElementById('standingDialogCourse').textContent = `${course.code} · ${course.title}`;
             document.getElementById('standingDialogStudent').textContent = student.student;
             document.getElementById('standingDialogEmail').textContent = student.email;
             const standingSummary = student.percentage === null
-                ? 'No scores have been entered.'
-                : `Current standing: ${formatPercentage(student.percentage)} across ${student.gradedWeight}% of course weight graded${student.grade === null ? '' : ` · Final PUP grade: ${Number(student.grade).toFixed(2)}`}`;
+                ? student.status === 'Invalid weights' ? 'The grading weights need correction.' : 'No scores have been entered.'
+                : `${student.status === 'Complete' ? 'Current' : 'Provisional'} standing: ${formatPercentage(student.percentage)} · ${student.gradedWeight}% course weight covered${student.grade === null ? '' : ` · Final PUP grade: ${Number(student.grade).toFixed(2)}`}`;
             document.getElementById('standingDialogSummary').textContent = standingSummary;
             document.getElementById('standingDialogBreakdown').innerHTML = student.components.map(component => {
                 const assessments = component.assessments.length
@@ -621,7 +690,8 @@ function templateText($value): string {
                     <ul class="mt-2 border-t border-stone-100 pt-2">${assessments}</ul>
                 </section>`;
             }).join('') || '<p class="text-xs text-stone-500">This course has no grading components.</p>';
-            document.getElementById('standingDialog').showModal();
+            dialog.dataset.enrollmentId = String(enrollmentId);
+            if (!dialog.open) dialog.showModal();
         }
 
         function renderTemplatesList() {
